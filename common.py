@@ -1,64 +1,59 @@
 #!/usr/bin/python
 
 import os
-from urlparse import urlparse
+#from urlparse import urlparse
 import csv
 import pickle
 from collections import Counter
 
 class Reviewer:
-    def __init__(self, first, last, email, url):
-        self.first = first
-        self.last = last
-        self.email = email
-        self.url = url
+    def __init__(self, gs_id):
+        self.gs_id = gs_id
         self.num_words = 0
-        self.pdf_links = set()
+        self.pdf_names = set()
         self.feature_vector = None
         self.words = []
-        self.html = None
-        self.status = "Init"
-        self.sql_id = None
+        #self.html = None
+        self.status = "PDFs"
+        #self.sql_id = None
 
-        if len(self.first) == 0 or len(self.last) == 0:
-            print "\n\nWarning!  Missing information for %s\n\n" % self
+        if len(self.gs_id) == 0:
+            print("\n\nWarning!  Missing information for %s\n\n" % self)
     
     def name(self):
-        return "%s %s" % (self.first, self.last)
+        return "%s" % (self.gs_id)
 
     def dir(self):
-        return self.name().replace(' ', '_')
+        return 'reviewer_papers/' + self.gs_id + '/'
+
+    def s3_filename(self, citation_id):
+        return 'reviewer_papers/' + self.gs_id + '/' + self.gs_id + ':' + citation_id + '.pdf'
 
     def __str__(self):
-        return self.name() + " %s %s" % (self.email, self.url)
+        return self.name()
 
     def __eq__(self, other):
         return isinstance(other, Reviewer) and \
-               self.name() == other.name() and \
-               self.email  == other.email and \
-               self.url    == other.url 
+               self.gs_id == other.gs_id
 
     def __hash__(self):
         return hash("%s" % self.name())
 
     def make_pdf_weights(self):
         weights = {}
-        sorted_links = sorted(self.pdf_links, key=lambda link: link.index)
-        for index, link in enumerate(sorted_links):
-            path = urlparse(link.url).path
-            pdf = path[path.rfind('/')+1:]
-            weights[pdf] = (len(sorted_links) - index) / float(len(sorted_links))
-            if len(sorted_links) < 15:  # If someone only has a small number of pubs, don't apply gradient weights
-                weights[pdf] = 1
+        for index, name in enumerate(self.pdf_names):
+            weights[name] = (len(self.pdf_names) - index) / float(len(self.pdf_names))
+            if len(self.pdf_names) < 15:  # If someone only has a small number of pubs, don't apply gradient weights
+                weights[name] = 1
         return weights
 
-    def display_status(self, max_width=1):
-        print "%s  %s\t%s\t%d" % (self.name().ljust(max_width), self.status, self.sql_id, len(self.words))
+    def display_status(self):
+        print(self.gs_id, self.words)
 
     def set_status(self, status):
         self.status = status
         if status == "Init" or status == "HTML":
-            self.pdf_links = set()
+            self.pdf_names = set()
 
         if status == "Init" or status == "HTML" or status == "PDFs":
             self.num_words = 0
@@ -112,7 +107,7 @@ class PC:
             del self.__reviewers[reviewer_name]
             return True
         else:
-            print "Sorry, %s is not recognized as a current PC member" % reviewer_name
+            print("Sorry, %s is not recognized as a current PC member" % reviewer_name)
             return False
 
     def save(self, filename):
@@ -121,12 +116,12 @@ class PC:
 
     def load(self, filename):
         if os.path.exists(filename):
-            print "Loading reviewer information..."
+            print("Loading reviewer information...")
             with open(filename, "rb") as pickler:
                 self.__reviewers = pickle.load(pickler)
-            print "Loading reviewer information complete!"
+            print("Loading reviewer information complete!")
         else:
-            print "Unable to find file of saved reviewers info: %s" % filename
+            print("Unable to find file of saved reviewers info: %s" % filename)
 
     def status(self):
         max_width = 0
@@ -155,12 +150,30 @@ class PC:
                         if not existing_reviewer == reviewer:
                             # Update the reviewer and mark for reprocessing
                             self.__reviewers[reviewer.name()] = reviewer
-                            print "Reviewer %s's info has been updated from\n\t%s\nto\n\t%s\n" % \
-                                (reviewer.name(), existing_reviewer, reviewer) 
+                            print("Reviewer %s's info has been updated from\n\t%s\nto\n\t%s\n" % \
+                                (reviewer.name(), existing_reviewer, reviewer))
                             reviewer.status = "Init"
                     else:
-                        print "Found a new reviewer: %s" % reviewer.name()
+                        print("Found a new reviewer: %s" % reviewer.name())
                         self.__reviewers[reviewer.name()] = reviewer
+
+    def parse_citations(self, citations_file_name):
+        with open(citations_file_name, 'r') as citations_file:
+            for line in citations_file:
+                tokens = line.split(':')
+                gs_id = tokens[0].strip()
+                citation_id = tokens[1].strip()
+                reviewer = self.__reviewers.get(gs_id, None)
+
+                # Add the reviewer if it doesn't already exist
+                if reviewer == None:
+                    print('Creating new reviewer:', gs_id)
+                    reviewer = Reviewer(gs_id)
+                    self.__reviewers[gs_id] = reviewer
+
+                # Add the citation id to the list of PDFs
+                print('Adding citation', citation_id, 'to reviewer', gs_id)
+                reviewer.pdf_names.add(citation_id)
 
     def __match_based_on_first_name(self, first):
         matches = []
@@ -193,7 +206,7 @@ class PC:
             return None
 
     def assign_sql_ids(self, pc_ids_file):
-        print "Matching reviewers to SQL IDs..."
+        print("Matching reviewers to SQL IDs...")
 
         with open(pc_ids_file, 'rb') as csv_file:
             reader = csv.DictReader(csv_file, delimiter="\t")
@@ -214,8 +227,12 @@ class PC:
                         if not match == None:
                             match.sql_id = id
                         else: 
-                            print "\nWARNING: Couldn't find a reviewer with name: %s %s!\n" % (first, last)
-        print "Matching reviewers to SQL IDs complete!"
+                            print("\nWARNING: Couldn't find a reviewer with name: %s %s!\n" % (first, last))
+        print("Matching reviewers to SQL IDs complete!")
+
+    def print_words(self):
+        for reviewer in self.reviewers():
+            reviewer.display_status()
 
 
 

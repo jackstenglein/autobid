@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 from common import *
+import aws
 
 import argparse
 import os
@@ -10,7 +11,7 @@ import math
 import random
 from subprocess import Popen, PIPE
 import subprocess
-import slate
+#import slate
 import pickle
 import sys
 import traceback
@@ -116,13 +117,13 @@ def scrape_via_pdftotext(pdf_file):
     text = check_output(cmd)
     return text
 
-def scrape_via_pdfminer(pdf_file):
-    text = ""
-    with open(pdf_file) as pdf:
-        pages = slate.PDF(pdf)
-        for page in pages:
-            text += page
-    return text
+# def scrape_via_pdfminer(pdf_file):
+#     text = ""
+#     with open(pdf_file) as pdf:
+#         pages = slate.PDF(pdf)
+#         for page in pages:
+#             text += page
+#     return text
 
 def analyze_words(pdf_file):
     stops = get_stop_words()
@@ -131,11 +132,12 @@ def analyze_words(pdf_file):
     try:
         text = scrape_via_pdftotext(pdf_file)
         words = find_words(text)
+        print("Found words:", words)
         stopped_words = [w for w in words if not w in stops]
         stemmed_words = [p_stemmer.stem(w) for w in stopped_words]
         return stemmed_words
     except:
-        print "\nUnexpected error while opening pdf %s!\n%s" % (pdf_file, traceback.format_exc())
+        #print "\nUnexpected error while opening pdf %s!\n%s" % (pdf_file, traceback.format_exc())
         return None
 
 ######################################################
@@ -151,53 +153,57 @@ def analyze_reviewer_papers(reviewer):
 
     if reviewer.status == "PDFs":
         count = Counter()  # Reset the count
-        pdfs = glob.glob('%s/*pdf' % reviewer.dir())
-        for pdf_file in pdfs:
-            print "Analyzing %s" % pdf_file
+        for pdf_name in reviewer.pdf_names:
+            # Download the PDF from AWS
+            s3_filename = reviewer.s3_filename(pdf_name)
+            local_filename = pdf_name + ".pdf"
+            print("Downloading AWS file", s3_filename, "to local file", local_filename)
+            aws.download_from_aws(local_filename, 'cs380s-security-project', s3_filename)
+
+            print("Analyzing ", local_filename)
             pdf_count = Counter()
             try:
-                words = analyze_words(pdf_file)
+                words = analyze_words(local_filename)
                 if words == None:
-                    print "WARNING: No words returned"
+                    print("WARNING: No words returned")
                     continue
                 reviewer.num_words += len(words)
                 pdf_count.update(words)
                 old_words += words
 
                 # Adjust word count for this pdf by it's weight
-                pdf_name = pdf_file[pdf_file.rfind('/')+1:]
                 weight = 1
                 if pdf_name in weights:
                     weight = weights[pdf_name]
                 else:
-                    print "WARNING: Failed to find a weight for PDF file %s" % pdf_name
+                    print("WARNING: Failed to find a weight for PDF file ", pdf_name)
 
                 weighted_count = {}
-                for word,word_count in pdf_count.iteritems():
+                for word, word_count in pdf_count.iteritems():
                     weighted_count[word] = word_count * weight
 
                 count.update(weighted_count)
             except:
-                print "\nUnexpected error while analyzing pdf %s!\n%s" % (pdf_file, traceback.format_exc())
+                print("\nUnexpected error while analyzing pdf %s!\n%s" % (pdf_file, traceback.format_exc()))
                 continue
     return (count, old_words)
 
 def analyze_reviewers_papers(pc, j):
-    print "Analyzing reviewers' papers..."
+    print("Analyzing reviewers' papers...")
     reviewers = pc.reviewers()
-    pool = None
-    if not j == None:
-        pool = Pool(int(j))
-    else:
-        pool = Pool()
-    feature_vectors = pool.map(analyze_reviewer_papers, reviewers)
+    # pool = None
+    # if not j == None:
+    #     pool = Pool(int(j))
+    # else:
+    #     pool = Pool()
+    feature_vectors = map(analyze_reviewer_papers, reviewers)
 
     for reviewer, (feature_vector, words) in zip(reviewers, feature_vectors):
         reviewer.feature_vector = feature_vector
         reviewer.words = words
         reviewer.status = "Features"
 
-    print "Analyzing reviewers' papers complete!"
+    print("Analyzing reviewers' papers complete!")
 
 
 
@@ -209,7 +215,7 @@ def analyze_reviewers_papers(pc, j):
 
 def analyze_submission(pdf_file):
     num_words = 0
-    print "Analyzing %s" % pdf_file
+    #print "Analyzing %s" % pdf_file
     words = analyze_words(pdf_file)
 
     feature_vector = Counter()
@@ -231,7 +237,7 @@ def analyze_submissions(submission_dir, j):
     for (pdf_file, result) in zip(pdfs, results):
         match = re.search("(.*)-paper(.*).pdf", pdf_file)
         if match == None:
-            print "Malformed submission file name: %s" % pdf_file
+            #print "Malformed submission file name: %s" % pdf_file
             continue
         conf_name = match.group(1)
         paper_id = int(match.group(2))
@@ -255,7 +261,7 @@ def analyze_submissions(submission_dir, j):
 def build_lda_model(corpus_dir, num_workers):
     model_file = "%s/lda.model" % corpus_dir
     if not os.path.isfile(model_file):
-        print "Analyzing PDFs..."
+        #print "Analyzing PDFs..."
         pdfs = glob.glob('%s/*pdf' % corpus_dir)
         pool = None
         if not num_workers == None:
@@ -263,7 +269,7 @@ def build_lda_model(corpus_dir, num_workers):
         else:
             pool = Pool()
         results = pool.map(analyze_words, pdfs)
-        print "Analyzing PDFs complete!"
+        #print "Analyzing PDFs complete!"
 
         condensed_results = [r for r in results if not r == None]
 
@@ -274,15 +280,16 @@ def build_lda_model(corpus_dir, num_workers):
         corpus = [dictionary.doc2bow(text) for text in condensed_results]
 
         # generate LDA model
-        print "Building topic model from PDFs..."
+        #print "Building topic model from PDFs..."
         ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=50, id2word = dictionary, passes=30)
 
-        print ldamodel.show_topics(num_topics=50)
+        #print ldamodel.show_topics(num_topics=50)
 
         ldamodel.save(model_file)
-        print "Building topic model from PDFs complete!"
+        #print "Building topic model from PDFs complete!"
     else:
-        print "LDA model already exists in file %s.  Delete or rename it to regenerate the model." % model_file
+        #print "LDA model already exists in file %s.  Delete or rename it to regenerate the model." % model_file
+        pass
 
 
 def main():
@@ -291,15 +298,17 @@ def main():
     parser.add_argument('--submissions', action='store', help="Directory of submissions", required=False)
     parser.add_argument('--corpus', action='store', help="Directory of PDFs from which to build a topic (LDA) model", required=False)
     parser.add_argument('-j', action='store', help="Number of processes to use", required=False)
+    parser.add_argument('-f', '--citations_file', required=False)
     
     args = parser.parse_args()
 
     pc = PC()
 
-    if not (args.cache == None):
-        pc.load(args.cache)
-        analyze_reviewers_papers(pc, args.j)
-        pc.save(args.cache)
+    # if not (args.cache == None):
+    #     pc.load(args.cache)
+    #     analyze_reviewers_papers(pc, args.j)
+    #     pc.print_words()
+    #     pc.save(args.cache)
 
     if not (args.submissions == None):
         pickle_file = "%s/submissions.dat" % args.submissions
@@ -311,7 +320,12 @@ def main():
     if not (args.corpus == None):
         build_lda_model(args.corpus, args.j)
 
+    if not (args.citations_file == None) and not (args.cache == None):
+        pc.parse_citations(args.citations_file)
+        analyze_reviewers_papers(pc, None)
+        # pc.save(args.cache)
+
 
 if (__name__=="__main__"):
-  main()
+    main()
 
