@@ -24,6 +24,12 @@ from nltk.stem.porter import PorterStemmer # sudo pip install -U nltk
 import gensim                              # sudo pip install -U --ignore-installed gensim
 from gensim import corpora, models
 
+def delete_file(filename):
+    try:
+        os.remove(filename)
+    except:
+        print("Unexpected error when removing file:", sys.exc_info()[0])
+
 ######################################################
 # 
 #   Text analysis routines
@@ -114,7 +120,7 @@ def find_words(string):
 # brew cask install pdftotext
 def scrape_via_pdftotext(pdf_file):
     cmd = ['pdftotext', pdf_file, '-']
-    text = check_output(cmd)
+    text = check_output(cmd, universal_newlines=True)
     return text
 
 # def scrape_via_pdfminer(pdf_file):
@@ -132,12 +138,11 @@ def analyze_words(pdf_file):
     try:
         text = scrape_via_pdftotext(pdf_file)
         words = find_words(text)
-        print("Found words:", words)
         stopped_words = [w for w in words if not w in stops]
         stemmed_words = [p_stemmer.stem(w) for w in stopped_words]
         return stemmed_words
     except:
-        #print "\nUnexpected error while opening pdf %s!\n%s" % (pdf_file, traceback.format_exc())
+        print("\nUnexpected error while opening pdf", pdf_file, "\n", traceback.format_exc())
         return None
 
 ######################################################
@@ -179,12 +184,14 @@ def analyze_reviewer_papers(reviewer):
                     print("WARNING: Failed to find a weight for PDF file ", pdf_name)
 
                 weighted_count = {}
-                for word, word_count in pdf_count.iteritems():
+                for word, word_count in pdf_count.items():
                     weighted_count[word] = word_count * weight
 
                 count.update(weighted_count)
+                delete_file(local_filename)
             except:
-                print("\nUnexpected error while analyzing pdf %s!\n%s" % (pdf_file, traceback.format_exc()))
+                print("\nUnexpected error while analyzing pdf %s!\n%s" % (pdf_name, traceback.format_exc()))
+                delete_file(local_filename)
                 continue
     return (count, old_words)
 
@@ -202,6 +209,7 @@ def analyze_reviewers_papers(pc, j):
         reviewer.feature_vector = feature_vector
         reviewer.words = words
         reviewer.status = "Features"
+        print("Reviewer words:", reviewer.words)
 
     print("Analyzing reviewers' papers complete!")
 
@@ -323,7 +331,7 @@ def main():
     if not (args.citations_file == None) and not (args.cache == None):
         pc.parse_citations(args.citations_file)
         analyze_reviewers_papers(pc, None)
-        # pc.save(args.cache)
+        pc.save(args.cache)
 
 
 if (__name__=="__main__"):
