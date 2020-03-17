@@ -78,9 +78,8 @@ class PDF:
 
 
 class Submission:
-    def __init__(self, conf, id):
-        self.conf = conf
-        self.id = id
+    def __init__(self, name):
+        self.name = name
         self.num_words = 0
         self.feature_vector = Counter()
         self.words = []

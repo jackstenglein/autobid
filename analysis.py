@@ -221,10 +221,16 @@ def analyze_reviewers_papers(pc, j):
 #
 ######################################################
 
-def analyze_submission(pdf_file):
+def analyze_submission(pdf_filename):
+    s3_filename = 'original_papers/' + pdf_filename
+    local_filename = pdf_filename
+    print("Downloading AWS file", s3_filename, "to local file", local_filename)
+    aws.download_from_aws(local_filename, 'cs380s-security-project', s3_filename)
+
     num_words = 0
-    #print "Analyzing %s" % pdf_file
-    words = analyze_words(pdf_file)
+    print("Analyzing," pdf_filename)
+    words = analyze_words(pdf_filename)
+    delete_file(local_filename)
 
     feature_vector = Counter()
     feature_vector.update(words)
@@ -232,30 +238,31 @@ def analyze_submission(pdf_file):
     return (words, feature_vector)
 
 
-def analyze_submissions(submission_dir, j):
-    pdfs = glob.glob('%s/*pdf' % submission_dir)
-    pool = None
-    if not j == None:
-        pool = Pool(int(j))
-    else:
-        pool = Pool()
-    results = pool.map(analyze_submission, pdfs)
+def analyze_submissions(submission_file, j):
+    # pdfs = glob.glob('%s/*pdf' % submission_dir)
+    # pool = None
+    # if not j == None:
+    #     pool = Pool(int(j))
+    # else:
+    #     pool = Pool()
+    pdf_filenames = []
+    with open(submission_file) as f:
+        for line in f:
+            pdf_filenames.append(line.strip())
+
+    results = map(analyze_submission, pdf_filenames)
 
     submissions = {}
-    for (pdf_file, result) in zip(pdfs, results):
-        match = re.search("(.*)-paper(.*).pdf", pdf_file)
-        if match == None:
-            #print "Malformed submission file name: %s" % pdf_file
-            continue
-        conf_name = match.group(1)
-        paper_id = int(match.group(2))
-        sub = Submission(conf_name, paper_id)
+    for (pdf_file, result) in zip(pdf_filenames, results):
+        sub = Submission(pdf_file)
         words, feature_vector = result
         if not(words == None):
             sub.num_words = len(words)
             sub.feature_vector = feature_vector
             sub.words = words
-            submissions[paper_id] = sub
+            submissions[pdf_file] = sub
+        else:
+            print("No words returned for", pdf_file)
 
     return submissions
 
@@ -303,7 +310,7 @@ def build_lda_model(corpus_dir, num_workers):
 def main():
     parser = argparse.ArgumentParser(description='Analyze PC papers and/or submissions')
     parser.add_argument('-c', '--cache', help="Use the specified file for caching reviewer status and information", required=False)
-    parser.add_argument('--submissions', action='store', help="Directory of submissions", required=False)
+    parser.add_argument('--submissions', action='store', help="List of submissions", required=False)
     parser.add_argument('--corpus', action='store', help="Directory of PDFs from which to build a topic (LDA) model", required=False)
     parser.add_argument('-j', action='store', help="Number of processes to use", required=False)
     parser.add_argument('-f', '--citations_file', required=False)
@@ -319,7 +326,7 @@ def main():
     #     pc.save(args.cache)
 
     if not (args.submissions == None):
-        pickle_file = "%s/submissions.dat" % args.submissions
+        pickle_file = "data/submissions.dat"
         if not os.path.isfile(pickle_file):
             submissions = analyze_submissions(args.submissions, args.j)
             with open(pickle_file, "wb") as pickler:
