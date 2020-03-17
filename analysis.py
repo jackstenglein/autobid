@@ -228,7 +228,7 @@ def analyze_submission(pdf_filename):
     aws.download_from_aws(local_filename, 'cs380s-security-project', s3_filename)
 
     num_words = 0
-    print("Analyzing," pdf_filename)
+    print("Analyzing", pdf_filename)
     words = analyze_words(pdf_filename)
     delete_file(local_filename)
 
