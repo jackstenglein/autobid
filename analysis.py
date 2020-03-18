@@ -145,6 +145,15 @@ def analyze_words(pdf_file):
         print("\nUnexpected error while opening pdf", pdf_file, "\n", traceback.format_exc())
         return None
 
+def analyze_s3_file(filenames):
+    (local_filename, s3_filename) = filenames
+    print('Analyzing', local_filename)
+    aws.download_from_aws(local_filename, 'cs380s-security-project', s3_filename)
+    words = analyze_words(local_filename)
+    delete_file(local_filename)
+    return words
+
+
 ######################################################
 # 
 #   Analyzing reviewer papers
@@ -273,18 +282,27 @@ def analyze_submissions(submission_file, j):
 #
 ######################################################
 
-def build_lda_model(corpus_dir, num_workers):
-    model_file = "%s/lda.model" % corpus_dir
+def build_lda_model(reviewer_corpus, submission_corpus):
+    model_file = "data/lda.model"
     if not os.path.isfile(model_file):
-        #print "Analyzing PDFs..."
-        pdfs = glob.glob('%s/*pdf' % corpus_dir)
-        pool = None
-        if not num_workers == None:
-            pool = Pool(int(num_workers))
-        else:
-            pool = Pool()
-        results = pool.map(analyze_words, pdfs)
-        #print "Analyzing PDFs complete!"
+        print("Compiling list of PDFs...")
+        
+        pdf_filenames = []
+        with open(reviewer_corpus) as f:
+            for line in f:
+                local_filename = line.strip() + '.pdf'
+                s3_filename = 'reviewer_papers/' + local_filename[0:local_filename.find(':')] + '/' + local_filename
+                pdf_filenames.append((local_filename, s3_filename))
+
+        with open(submission_corpus) as f:
+            for line in f:
+                local_filename = line.strip()
+                s3_filename = 'original_papers/' + local_filename
+                pdf_filenames.append((local_filename, s3_filename))
+
+        print('Analyzing PDFs...')
+        results = pool.map(analyze_s3_file, pdf_filenames)
+        print('Analyzing PDFs complete!')
 
         condensed_results = [r for r in results if not r == None]
 
@@ -295,13 +313,13 @@ def build_lda_model(corpus_dir, num_workers):
         corpus = [dictionary.doc2bow(text) for text in condensed_results]
 
         # generate LDA model
-        #print "Building topic model from PDFs..."
+        print("Building topic model from PDFs...")
         ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=50, id2word = dictionary, passes=30)
 
-        #print ldamodel.show_topics(num_topics=50)
+        print(ldamodel.show_topics(num_topics=50))
 
         ldamodel.save(model_file)
-        #print "Building topic model from PDFs complete!"
+        print("Building topic model from PDFs complete!")
     else:
         #print "LDA model already exists in file %s.  Delete or rename it to regenerate the model." % model_file
         pass
@@ -311,7 +329,8 @@ def main():
     parser = argparse.ArgumentParser(description='Analyze PC papers and/or submissions')
     parser.add_argument('-c', '--cache', help="Use the specified file for caching reviewer status and information", required=False)
     parser.add_argument('--submissions', action='store', help="List of submissions", required=False)
-    parser.add_argument('--corpus', action='store', help="Directory of PDFs from which to build a topic (LDA) model", required=False)
+    parser.add_argument('--reviewer_corpus', action='store', help="Directory of PDFs from which to build a topic (LDA) model", required=False)
+    parser.add_argument('--submission_corpus', action='store', help="Directory of PDFs from which to build a topic (LDA) model", required=False)
     parser.add_argument('-j', action='store', help="Number of processes to use", required=False)
     parser.add_argument('-f', '--citations_file', required=False)
     
@@ -332,8 +351,8 @@ def main():
             with open(pickle_file, "wb") as pickler:
                 pickle.dump(submissions, pickler)
 
-    if not (args.corpus == None):
-        build_lda_model(args.corpus, args.j)
+    if not (args.reviewer_corpus == None) and not (args.submission_corpus == None):
+        build_lda_model(args.reviewer_corpus, args.submission_corpus)
 
     if not (args.citations_file == None) and not (args.cache == None):
         pc.parse_citations(args.citations_file)
