@@ -2,6 +2,7 @@ arguments = "--reviewer_corpus ../cs380s-security/data/correct_reviewer_files.tx
 error = err.$(process)
 output = out.$(process)
 executable = analysis.py
+universe = vanilla
 log = tpms.log
 +Group = "UNDER"
 +Project = "OTHER"
