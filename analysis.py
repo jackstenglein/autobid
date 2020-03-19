@@ -301,7 +301,7 @@ def build_lda_model(reviewer_corpus, submission_corpus):
                 pdf_filenames.append((local_filename, s3_filename))
 
         print('Analyzing PDFs...')
-        results = pool.map(analyze_s3_file, pdf_filenames)
+        results = map(analyze_s3_file, pdf_filenames)
         print('Analyzing PDFs complete!')
 
         condensed_results = [r for r in results if not r == None]

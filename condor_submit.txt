@@ -1,0 +1,8 @@
+arguments = "--reviewer_corpus ../cs380s-security/data/correct_reviewer_files.txt --submission_corpus ../cs380s-security/data/correct_submission_files.txt"
+error = err.$(process)
+output = out.$(process)
+executable = analysis.py
+log = tpms.log
++Group = "UNDER"
++Project = "OTHER"
++ProjectDescription = "Running Toronto Paper Matching System on corpus of research papers"
