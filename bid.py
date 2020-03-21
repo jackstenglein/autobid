@@ -189,7 +189,7 @@ def dump_real_prefs(realprefs_csvfile, pc_ids_file, reviewers):
 
 
 def load_2017_prefs(reviewers):
-    print "Loading reviewers bids from 2017..."
+    print("Loading reviewers bids from 2017...")
     reviewers2017 = {}
     for reviewer in reviewers.values():
         prefs_file = glob.glob('%s/oakland17-revprefs*.csv' % reviewer.dir())
@@ -205,14 +205,14 @@ def load_2017_prefs(reviewers):
                     elif is_digit(row['preference']):
                         pref = int(row['preference'])
                     else:
-                        print "WARNING: Unknown preference %s for 2017 reviewer %s" % (row['preference'], reviewer)
+                        print("WARNING: Unknown preference %s for 2017 reviewer %s" % (row['preference'], reviewer))
 
                     b = Bid(score=pref, submission=row['paper'])
                     prefs.append(b)
             reviewers2017[reviewer] = prefs
 
-    print "Loaded 2017 preferences for %d reviewers" % len(reviewers2017)
-    print "Loading reviewers bids from 2017 complete!"
+    print("Loaded 2017 preferences for %d reviewers" % len(reviewers2017))
+    print("Loading reviewers bids from 2017 complete!")
     return reviewers2017
 
 def load_submissions(submissions_dir):
