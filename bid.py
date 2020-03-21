@@ -54,7 +54,7 @@ def create_bid(reviewer, corpus, submission, method):
         if normalized_word_count > 0:
             s_rp += count * math.log(normalized_word_count, 2)
         elif normalized_word_count < 0:
-            print "WARNING: Got negative normalized_word_count of %f for %s" % (normalized_word_count, word)
+            print("WARNING: Got negative normalized_word_count of", normalize_word_count, "for", word)
 
     # Normalize score by length (i.e., number of words)
     s_rp = s_rp / float(submission.num_words)
@@ -87,7 +87,7 @@ def compare_submission_bids(reviewer, corpus, s1, s2, method):
     sorted_diffs = sorted(diffs, key=lambda t: t[1], reverse=True)
     for word, diff in sorted_diffs:
         percent = 100 * (diff / pos_diff_total if diff > 0 else diff / neg_diff_total)
-        print "%s\t%f (%0.1f%%)" % (word.ljust(30), diff, percent)
+        print("%s\t%f (%0.1f%%)" % (word.ljust(30), diff, percent))
 
 def normalize_bids(bids):
     sorted_bids = sorted(bids, key=lambda bid: bid.score, reverse=True)
@@ -117,7 +117,7 @@ def write_bid_file(filename, bids):
     delete_file(filename)
 
 def create_reviewer_bid(reviewer, submissions, lda_model):
-    print "Creating bid for reviewer %s..." % reviewer.name()
+    print("Creating bid for reviewer", reviewer.name())
 
     # Analyze topics for the reviewer 
     reviewer_topic_list = lda_model[lda_model.id2word.doc2bow(reviewer.words)]
@@ -150,12 +150,12 @@ def create_reviewer_bid(reviewer, submissions, lda_model):
                 customized_sql = sql % (bid.submission.id, reviewer.sql_id, bid.score)
                 mysql_file.write(customized_sql)
 
-    print "Creating bid for reviewer %s complete!" % reviewer.name()
+    print("Creating bid for reviewer", reviewer.name(), "complete!")
 
 
 def parse_real_prefs(realprefs_csvfile):
     prefs = {}
-    print "Parsing real preferences..."
+    print("Parsing real preferences...")
     with open(realprefs_csvfile, 'rb') as csv_file:
         reader = csv.DictReader(csv_file, delimiter="\t")
         for row in reader:
@@ -165,27 +165,27 @@ def parse_real_prefs(realprefs_csvfile):
                 prefs[id] = [bid]
             else:
                 prefs[id].append(bid)
-    print "Parsing real preferences complete!"
+    print("Parsing real preferences complete!")
     return prefs 
 
 def dump_real_prefs(realprefs_csvfile, pc_ids_file, reviewers):
     id_mapping = match_reviewers_to_ids(reviewers, pc_ids_file)
     real_prefs = parse_real_prefs(realprefs_csvfile)
 
-    print "Dumping reviewers' real preferences..."
+    print("Dumping reviewers' real preferences...")
     for reviewer in reviewers:
         if not reviewer in id_mapping:
-            print "Couldn't find an id for %s.  Skipping." % reviewer
+            print("Couldn't find an id for %s.  Skipping." % reviewer)
             continue
         id = id_mapping[reviewer]
 
         if not id in real_prefs:
-            print "Couldn't find an id %s for reviewer %s in set of real preferences.  Skipping." % (id, reviewer)
+            print("Couldn't find an id %s for reviewer %s in set of real preferences.  Skipping." % (id, reviewer))
             continue
         real_bids = real_prefs[id]
 
         write_bid_file(reviewers[reviewer].dir(), "real_bid.csv", real_bids)
-    print "Dumping reviewers' real preferences complete!"
+    print("Dumping reviewers' real preferences complete!")
 
 
 def load_2017_prefs(reviewers):
@@ -216,20 +216,20 @@ def load_2017_prefs(reviewers):
     return reviewers2017
 
 def load_submissions(submissions_dir):
-    print "Loading submissions..."
+    print("Loading submissions...")
     pickle_file = "%s/submissions.dat" % submissions_dir
     submissions = None
     with open(pickle_file, "rb") as pickler:
         submissions = pickle.load(pickler)
 
-    print "Loading submissions complete!"
+    print("Loading submissions complete!")
     return submissions
 
 def load_model(corpus_dir):
-    print "Loading LDA model..."
+    print("Loading LDA model...")
     pickle_file = "%s/lda.model" % corpus_dir
     lda_model = gensim.models.ldamodel.LdaModel.load(pickle_file)
-    print "Loading LDA model complete"
+    print("Loading LDA model complete")
     return lda_model
 
 
