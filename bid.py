@@ -2,6 +2,7 @@
 
 from common import *
 
+import aws
 import argparse
 import os
 import glob
@@ -103,17 +104,17 @@ def normalize_bids(bids):
         norm_bids.append(norm_bid)
     return norm_bids
 
-def write_bid_file(dirname, filename, bids):
+def write_bid_file(filename, bids):
     bid_out = "preference,paper\n"
     for bid in sorted(bids, key=lambda bid: bid.score, reverse=True):
         #print "%0.2f,%s" % (bid.score, bid.submission.id)
-        bid_out += "%d,%s\n" % (bid.score, bid.submission.id)
+        bid_out += "%d,%s\n" % (bid.score, bid.submission.name)
 
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
-
-    with open("%s/%s" % (dirname, filename), 'w') as bid_file:
+    with open(filename, 'w') as bid_file:
         bid_file.write(bid_out)
+
+    aws.upload(filename, 'cs380s-security-project', 'bids/' + filename)
+    delete_file(filename)
 
 def create_reviewer_bid(reviewer, submissions, lda_model):
     print "Creating bid for reviewer %s..." % reviewer.name()

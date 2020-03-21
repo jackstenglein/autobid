@@ -11,6 +11,24 @@ def get_aws_credentials():
         credentials = f.readline().split(',')
         return (credentials[ACCESS_KEY_INDEX], credentials[SECRET_KEY_INDEX])
 
+""" Uploads a local file to the given S3 bucket """
+def upload(filename, bucket, s3_filename):
+    (access_key, secret_key) = get_aws_credentials()
+    s3 = boto3.client('s3', aws_access_key_id=access_key, aws_secret_access_key=secret_key)
+
+    try:
+        s3.upload_file(filename, bucket, s3_filename)
+        return True
+    except FileNotFoundError:
+        print("The file was not found")
+        return False
+    except NoCredentialsError:
+        print("Credentials not available")
+        return False
+    except:
+        print("Unexpected error:", sys.exc_info()[0])
+        return False
+
 """ Downloads a file from the given S3 bucket and saves it at the local filename """
 def download_from_aws(filename, bucket, s3_filename):
     (access_key, secret_key) = get_aws_credentials()
