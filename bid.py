@@ -14,6 +14,12 @@ import sys
 import gensim                       # sudo pip install -U --ignore-installed gensim
 from gensim import corpora, models
 
+def delete_file(filename):
+    try:
+        os.remove(filename)
+    except:
+        print("Unexpected error when removing file:", sys.exc_info()[0])
+
 class Bid:
     def __init__(self, score, submission):
         self.score = score
@@ -139,17 +145,7 @@ def create_reviewer_bid(reviewer, submissions, lda_model):
         bids.append(b)
 
     bids = normalize_bids(bids)
-    
-    write_bid_file(reviewer.dir(), "bid.csv", bids)
-
-    if not (reviewer.sql_id == None):
-        # Write out a sql command to insert the bid
-        sql = "INSERT INTO PaperReviewPreference (paperId, contactId, preference) VALUES (%s, %s, %s);\n"
-        with open("%s/bid.mysql"% reviewer.dir(), 'w') as mysql_file:
-            for bid in sorted(bids, key=lambda bid: bid.score, reverse=True): 
-                customized_sql = sql % (bid.submission.id, reviewer.sql_id, bid.score)
-                mysql_file.write(customized_sql)
-
+    write_bid_file(reviewer.name() +  ".csv", bids)
     print("Creating bid for reviewer", reviewer.name(), "complete!")
 
 
