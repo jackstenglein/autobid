@@ -56,13 +56,13 @@ def bids_for_doc(doc_top_list, td, reviewers):
     """
     Generate bids for the document for all provided reviewers
     """
-    bids = {}
+    bids = []
     for rev in reviewers:
         rev_top_dict = dict(td.rev_top[rev.name()])
         score = 0
         for t_id, t_prob in doc_top_list:
             score += rev_top_dict.get(t_id, 0) * t_prob
-        bids[rev.name()] = score
+        bids.append(score)
     return bids
 
 def save_unchanged_bids(reviewers, submissions, td, cache_dir):
@@ -160,47 +160,78 @@ def main():
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     rev_word_prob = load_adv_word_probs(args.cache)
+    old_bids = load_unchanged_bids(args.cache)
 
-    old_ranks = []
-    new_ranks = []
+    n = 1000
 
-    # Select random set of reviewers and submissions
-    reviewers = np.random.choice(reviewers, 50)
-    submissions = np.random.choice(submissions, 10)
+    old_sub_rank_in_rev = np.zeros(n, dtype=int)
+    old_rev_rank_in_sub = np.zeros(n, dtype=int)
 
-    for s_idx in trange(len(submissions), desc="Submissions"):
+    new_sub_rank_in_rev = np.zeros(n, dtype=int)
+    new_rev_rank_in_sub = np.zeros(n, dtype=int)
+
+    for i in trange(n, desc="Trials"):
+        r_idx = np.random.randint(0, len(reviewers))
+        s_idx = np.random.randint(0, len(submissions))
+
         sub = submissions[s_idx]
-        # Calculate bids for unchanged submission
-        old_bids = bids_for_doc(td.sub_top[sub.name], td, reviewers)
-        # Find rank of each reviewer for this submission
-        old_bids_sorted = sorted(old_bids.keys(),
-                key = lambda k: -1 * old_bids[k])
-        old_bids_rank = {}
-        for i, rev in enumerate(old_bids_sorted):
-            old_bids_rank[rev] = i + 1
-        # For each reviewer, try to modify the submission so that it gets high
-        # bid score for that reviewer
-        for r_idx in trange(len(reviewers), desc="Reviewers"):
-            rev = reviewers[r_idx]
-            old_ranks.append(old_bids_rank[rev.name()])
-            # Generate new doc based on adversarial word probs for the reviewer
-            new_doc = words_from_probs(rev_word_prob[rev.name()], len(sub.words))
-            # Generate new bids
-            new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc + sub.words)], td, reviewers)
-            # Find new rank of the reviewer
-            rank = 1
-            for k in new_bids:
-                if new_bids[k] > new_bids[rev.name()]:
-                    rank += 1
-            new_ranks.append(rank)
-    old_ranks = np.array(old_ranks)
-    new_ranks = np.array(new_ranks)
+        rev = reviewers[r_idx]
+
+        # Generate new doc based on adversarial word probs for the reviewer
+        new_doc = words_from_probs(rev_word_prob[rev.name()], len(sub.words))
+        # Generate new bids for this updated submission
+        new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc + sub.words)],
+                td, reviewers)
+
+        # Find old rank of sub in rev's list
+        rank = 1
+        for b in old_bids[r_idx, :]:
+            if b > old_bids[r_idx, s_idx]:
+                rank += 1
+        old_sub_rank_in_rev[i] = rank
+
+        # Find old rank of rev in sub's list
+        rank = 1
+        for b in old_bids[:, s_idx]:
+            if b > old_bids[r_idx, s_idx]:
+                rank += 1
+        old_rev_rank_in_sub[i] = rank
+
+        # Find new rank of sub in rev's list
+        rank = 1
+        for b in old_bids[r_idx, :]:
+            if b > new_bids[r_idx]:
+                rank += 1
+        new_sub_rank_in_rev[i] = rank
+
+        # Find new rank of rev in sub's list
+        rank = 1
+        for b in new_bids:
+            if b > new_bids[r_idx]:
+                rank += 1
+        new_rev_rank_in_sub[i] = rank
+
     print("# reviewers: %d, # submissions: %d" % (len(reviewers),
         len(submissions)))
-    print("Stat\t\told_rank\tnew_rank")
-    print("Avg. rank\t%f\t%f" % (np.mean(old_ranks), np.mean(new_ranks)))
-    print("Rank 1\t\t%d\t%d" % (np.count_nonzero(old_ranks == 1), np.count_nonzero(new_ranks == 1)))
-    print("Top 3\t\t%d\t%d" % (np.count_nonzero(old_ranks <= 3), np.count_nonzero(new_ranks <= 3)))
+    print("# trials: %d" % n)
+    print("\nRank of submission in reviewer's list:")
+    print("---------------------------------------")
+    print("Stat\t\told\tnew")
+    print("Avg\t%f\t%f" % (np.mean(old_sub_rank_in_rev),
+        np.mean(new_sub_rank_in_rev)))
+    print("Top 1\t\t%d\t%d" % (np.count_nonzero(old_sub_rank_in_rev == 1),
+        np.count_nonzero(new_sub_rank_in_rev == 1)))
+    print("Top 3\t\t%d\t%d" % (np.count_nonzero(old_sub_rank_in_rev <= 3),
+        np.count_nonzero(new_sub_rank_in_rev <= 3)))
+    print("\nRank of reviewer in submission's list:")
+    print("---------------------------------------")
+    print("Stat\t\told\tnew")
+    print("Avg\t%f\t%f" % (np.mean(old_rev_rank_in_sub),
+        np.mean(new_rev_rank_in_sub)))
+    print("Top 1\t\t%d\t%d" % (np.count_nonzero(old_rev_rank_in_sub == 1),
+        np.count_nonzero(new_rev_rank_in_sub == 1)))
+    print("Top 3\t\t%d\t%d" % (np.count_nonzero(old_rev_rank_in_sub <= 3),
+        np.count_nonzero(new_rev_rank_in_sub <= 3)))
 
 if __name__ == "__main__":
     main()
