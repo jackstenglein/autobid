@@ -5,9 +5,51 @@ import argparse
 import matplotlib.pyplot as plt
 import multiprocessing
 import pickle
+import math
 
 import common
 import bid
+
+class BidData:
+    """
+    Class to save bid related data to speed up the experiments.
+    """
+    def __init__(self):
+        self.normalized_bids = []
+        self.rev_max_raw = []
+        self.rev_min_raw = []
+        self.target_min = -90
+        self.target_max = 100
+
+    def get_normalizer(self, min_bid, max_bid):
+        return lambda score: int(round(self.target_min + \
+                (score - min_bid) / float((max_bid - min_bid) / \
+                            float(self.target_max - self.target_min)
+                        )))
+
+
+    def populate(self, td, reviewers, submissions):
+        self.normalized_bids = np.zeros((len(reviewers), len(submissions)), dtype=np.int)
+        for r_idx in trange(len(reviewers)):
+            rev = reviewers[r_idx]
+            raw_bids, min_bid, max_bid = bids_for_rev(rev, td, submissions)
+            self.rev_min_raw.append(min_bid)
+            self.rev_max_raw.append(max_bid)
+            self.normalized_bids[r_idx, :] = np.vectorize(
+                    self.get_normalizer(min_bid, max_bid)
+                )(raw_bids)
+
+    @classmethod
+    def load(cls, cache_dir):
+        print("Loading bid data...")
+        with open("%s/bid_data.dat" % cache_dir, "rb") as pickler:
+            res = pickle.load(pickler)
+        print("Loading bid data complete!")
+        return res
+
+    def save(self, cache_dir):
+        with open("%s/bid_data.dat" % cache_dir, "wb") as pickler:
+            pickle.dump(self, pickler)
 
 class TopicData:
     """
@@ -42,15 +84,19 @@ def bids_for_rev(rev, td, submissions):
     """
     Generate bids for the reviewer for all provided submissions
     """
-    bids = []
+    bids = np.zeros(len(submissions), dtype=np.float32)
     rev_top_dict = dict(td.rev_top[rev.name()])
-    for sub in submissions:
+    min_bid = math.inf
+    max_bid = -1
+    for s_idx, sub in enumerate(submissions):
         doc_top_list = td.sub_top[sub.name]
         score = 0
         for t_id, t_prob in doc_top_list:
             score += rev_top_dict.get(t_id, 0) * t_prob
-        bids.append(score)
-    return bids
+        min_bid = min(min_bid, score)
+        max_bid = max(max_bid, score)
+        bids[s_idx] = score
+    return bids, min_bid, max_bid
 
 def bids_for_doc(doc_top_list, td, reviewers):
     """
@@ -64,28 +110,6 @@ def bids_for_doc(doc_top_list, td, reviewers):
             score += rev_top_dict.get(t_id, 0) * t_prob
         bids.append(score)
     return bids
-
-def save_unchanged_bids(reviewers, submissions, td, cache_dir):
-    """
-    Pre-calculate all the bids and cache the raw results to speedup the
-    experiments
-    """
-    old_bids = np.zeros((len(reviewers), len(submissions)), dtype=np.float32)
-    for r_idx in trange(len(reviewers)):
-        rev = reviewers[r_idx]
-        old_bids[r_idx, :] = bids_for_rev(rev, td, submissions)
-    with open("%s/old_bids.dat" % cache_dir, "wb") as pickler:
-        pickle.dump(old_bids, pickler)
-
-def load_unchanged_bids(cache_dir):
-    """
-    Loads the pre-calculated bids from cache
-    """
-    print("Loading unchanged bids...")
-    with open("%s/old_bids.dat" % cache_dir, "rb") as pickler:
-        old_bids = pickle.load(pickler)
-    print("Loading unchanged bids complete!")
-    return old_bids
 
 def save_adv_word_probs(reviewers, td, cache_dir):
     """
@@ -129,8 +153,9 @@ def adv_word_probs_for_rev(rev, td):
             # contribution to that topic
             if w not in wds_prob:
                 wds_prob[w] = 0
-            wds_prob[w] += t_prob * w_prob
-            s += t_prob * w_prob
+            prob = t_prob * w_prob
+            wds_prob[w] += prob
+            s += prob
     for w in wds_prob:
         wds_prob[w] = wds_prob[w] / s
     return wds_prob
@@ -159,8 +184,8 @@ def main():
     submissions = list(bid.load_submissions(args.cache).values())
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
+    bd = BidData.load(args.cache)
     rev_word_prob = load_adv_word_probs(args.cache)
-    old_bids = load_unchanged_bids(args.cache)
 
     n = 1000
 
@@ -185,29 +210,46 @@ def main():
 
         # Find old rank of sub in rev's list
         rank = 1
-        for b in old_bids[r_idx, :]:
-            if b > old_bids[r_idx, s_idx]:
+        for b in bd.normalized_bids[r_idx, :]:
+            if b > bd.normalized_bids[r_idx, s_idx]:
                 rank += 1
         old_sub_rank_in_rev[i] = rank
 
         # Find old rank of rev in sub's list
         rank = 1
-        for b in old_bids[:, s_idx]:
-            if b > old_bids[r_idx, s_idx]:
+        for b in bd.normalized_bids[:, s_idx]:
+            if b > bd.normalized_bids[r_idx, s_idx]:
                 rank += 1
         old_rev_rank_in_sub[i] = rank
 
         # Find new rank of sub in rev's list
         rank = 1
-        for b in old_bids[r_idx, :]:
-            if b > new_bids[r_idx]:
+        # Normalize new bid using old min and max because we just need to
+        # compare with the old values of same reviewer
+        normalized_new_bid = bd.get_normalizer(
+                bd.rev_min_raw[r_idx], bd.rev_max_raw[r_idx]
+            )(new_bids[r_idx])
+        for si, b in enumerate(bd.normalized_bids[r_idx, :]):
+            if si != s_idx and b > normalized_new_bid:
                 rank += 1
         new_sub_rank_in_rev[i] = rank
 
         # Find new rank of rev in sub's list
         rank = 1
-        for b in new_bids:
-            if b > new_bids[r_idx]:
+        # Normalize new bid using new min and max because we need to
+        # compare across different reviewers
+        normalized_new_bid = bd.get_normalizer(
+                min(bd.rev_min_raw[r_idx], new_bids[r_idx]),
+                max(bd.rev_max_raw[r_idx], new_bids[r_idx])
+            )(new_bids[r_idx])
+        for ri, b in enumerate(new_bids):
+            # Normalize new bid using new min and max because we need to
+            # compare across different reviewers
+            b = bd.get_normalizer(
+                    min(bd.rev_min_raw[ri], b),
+                    max(bd.rev_max_raw[ri], b)
+                )(b)
+            if b > normalized_new_bid:
                 rank += 1
         new_rev_rank_in_sub[i] = rank
 
