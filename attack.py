@@ -38,6 +38,55 @@ class TopicData:
         with open("%s/topic_data.dat" % cache_dir, "wb") as pickler:
             pickle.dump(self, pickler)
 
+def bids_for_rev(rev, td, submissions):
+    """
+    Generate bids for the reviewer for all provided submissions
+    """
+    bids = []
+    rev_top_dict = dict(td.rev_top[rev.name()])
+    for sub in submissions:
+        doc_top_list = td.sub_top[sub.name]
+        score = 0
+        for t_id, t_prob in doc_top_list:
+            score += rev_top_dict.get(t_id, 0) * t_prob
+        bids.append(score)
+    return bids
+
+def bids_for_doc(doc_top_list, td, reviewers):
+    """
+    Generate bids for the document for all provided reviewers
+    """
+    bids = {}
+    for rev in reviewers:
+        rev_top_dict = dict(td.rev_top[rev.name()])
+        score = 0
+        for t_id, t_prob in doc_top_list:
+            score += rev_top_dict.get(t_id, 0) * t_prob
+        bids[rev.name()] = score
+    return bids
+
+def save_unchanged_bids(reviewers, submissions, td, cache_dir):
+    """
+    Pre-calculate all the bids and cache the raw results to speedup the
+    experiments
+    """
+    old_bids = np.zeros((len(reviewers), len(submissions)), dtype=np.float32)
+    for r_idx in trange(len(reviewers)):
+        rev = reviewers[r_idx]
+        old_bids[r_idx, :] = bids_for_rev(rev, td, submissions)
+    with open("%s/old_bids.dat" % cache_dir, "wb") as pickler:
+        pickle.dump(old_bids, pickler)
+
+def load_unchanged_bids(cache_dir):
+    """
+    Loads the pre-calculated bids from cache
+    """
+    print("Loading unchanged bids...")
+    with open("%s/old_bids.dat" % cache_dir, "rb") as pickler:
+        old_bids = pickle.load(pickler)
+    print("Loading unchanged bids complete!")
+    return old_bids
+
 def save_adv_word_probs(reviewers, td, cache_dir):
     """
     Pre-calculate all adversarial word probabilities and cache the results to
@@ -97,19 +146,6 @@ def words_from_probs(wds_prob, num_words):
             wds.append(w)
     return wds
 
-def bids_for_doc(doc_top_list, td, reviewers):
-    """
-    Generate bids for the document for all provided reviewers
-    """
-    bids = {}
-    for rev in reviewers:
-        rev_top_dict = dict(td.rev_top[rev.name()])
-        score = 0
-        for t_id, t_prob in doc_top_list:
-            score += rev_top_dict.get(t_id, 0) * t_prob
-        bids[rev.name()] = score
-    return bids
-
 def main():
     parser = argparse.ArgumentParser(description='Attack Autobid')
     parser.add_argument('-c', '--cache', help="Directory storing the pickled data about reviewers, submissions, and LDA model", required=True)
@@ -131,7 +167,7 @@ def main():
     # Select random set of reviewers and submissions
     reviewers = np.random.choice(reviewers, 50)
     submissions = np.random.choice(submissions, 10)
-    
+
     for s_idx in trange(len(submissions), desc="Submissions"):
         sub = submissions[s_idx]
         # Calculate bids for unchanged submission
