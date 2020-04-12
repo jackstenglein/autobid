@@ -62,7 +62,8 @@ class TopicData:
 
     def populate(self, m, reviewers, submissions):
         for rev in tqdm(reviewers):
-            self.rev_top[rev.name()] = m[m.id2word.doc2bow(rev.words)]
+            self.rev_top[rev.name()] = sorted(m[m.id2word.doc2bow(rev.words)],
+                    key = lambda a: -1 * a[1])
         for sub in tqdm(submissions):
             self.sub_top[sub.name] = m[m.id2word.doc2bow(sub.words)]
         for t_id, wds in tqdm(m.show_topics(num_topics=m.num_topics, formatted=False)):
@@ -145,7 +146,7 @@ def adv_word_probs_for_rev(rev, td):
     rev_top_list = td.rev_top[rev.name()]
     wds_prob = {}
     s = 0
-    for t_id, t_prob in rev_top_list:
+    for t_id, t_prob in rev_top_list[:5]:
         # Get words contributing to each topic
         t_wds = td.top_wds[t_id]
         for w, w_prob in t_wds:
@@ -160,14 +161,17 @@ def adv_word_probs_for_rev(rev, td):
         wds_prob[w] = wds_prob[w] / s
     return wds_prob
 
-def words_from_probs(wds_prob, num_words):
+def words_from_probs(wds_prob, sub):
     """
-    Return list of nearly `num_words` words as per their probability
+    Return list of adversarial words for `sub` as per their probability
     distribution
     """
     wds = []
     for w in wds_prob:
-        for _ in range(int(round(wds_prob[w] * num_words))):
+        n = int(round(wds_prob[w] * 1 * sub.num_words)) - sub.feature_vector[w]
+        if n <= 0:
+            continue
+        for _ in range(n):
             wds.append(w)
     return wds
 
@@ -187,13 +191,16 @@ def main():
     bd = BidData.load(args.cache)
     rev_word_prob = load_adv_word_probs(args.cache)
 
-    n = 1000
+    n = 500
 
     old_sub_rank_in_rev = np.zeros(n, dtype=int)
     old_rev_rank_in_sub = np.zeros(n, dtype=int)
 
     new_sub_rank_in_rev = np.zeros(n, dtype=int)
     new_rev_rank_in_sub = np.zeros(n, dtype=int)
+
+    old_size = 0
+    new_size = 0
 
     for i in trange(n, desc="Trials"):
         r_idx = np.random.randint(0, len(reviewers))
@@ -203,8 +210,15 @@ def main():
         rev = reviewers[r_idx]
 
         # Generate new doc based on adversarial word probs for the reviewer
-        new_doc = words_from_probs(rev_word_prob[rev.name()], len(sub.words))
+        new_doc = words_from_probs(rev_word_prob[rev.name()], sub)
         # Generate new bids for this updated submission
+        if sub.num_words == 0:
+            n -= 1
+            print(sub.name)
+            continue
+        else:
+            old_size += sub.num_words
+            new_size += 1 + len(new_doc) / sub.num_words 
         new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc + sub.words)],
                 td, reviewers)
 
@@ -253,27 +267,30 @@ def main():
                 rank += 1
         new_rev_rank_in_sub[i] = rank
 
+    print()
     print("# reviewers: %d, # submissions: %d" % (len(reviewers),
         len(submissions)))
     print("# trials: %d" % n)
+    print("Avg. old size (# words): %.2f" % (old_size / n,))
+    print("Avg. new size: %.2fx" % (new_size / n,))
     print("\nRank of submission in reviewer's list:")
     print("---------------------------------------")
     print("Stat\t\told\tnew")
-    print("Avg\t%f\t%f" % (np.mean(old_sub_rank_in_rev),
+    print("Avg\t\t%.2f\t%.2f" % (np.mean(old_sub_rank_in_rev),
         np.mean(new_sub_rank_in_rev)))
-    print("Top 1\t\t%d\t%d" % (np.count_nonzero(old_sub_rank_in_rev == 1),
-        np.count_nonzero(new_sub_rank_in_rev == 1)))
-    print("Top 3\t\t%d\t%d" % (np.count_nonzero(old_sub_rank_in_rev <= 3),
-        np.count_nonzero(new_sub_rank_in_rev <= 3)))
+    print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev == 1) * 100 / n,
+        np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n))
+    print("Top 5\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev <= 5) * 100 / n,
+        np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n))
     print("\nRank of reviewer in submission's list:")
     print("---------------------------------------")
     print("Stat\t\told\tnew")
-    print("Avg\t%f\t%f" % (np.mean(old_rev_rank_in_sub),
+    print("Avg\t\t%.2f\t%.2f" % (np.mean(old_rev_rank_in_sub),
         np.mean(new_rev_rank_in_sub)))
-    print("Top 1\t\t%d\t%d" % (np.count_nonzero(old_rev_rank_in_sub == 1),
-        np.count_nonzero(new_rev_rank_in_sub == 1)))
-    print("Top 3\t\t%d\t%d" % (np.count_nonzero(old_rev_rank_in_sub <= 3),
-        np.count_nonzero(new_rev_rank_in_sub <= 3)))
+    print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub == 1) * 100 / n,
+        np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n))
+    print("Top 3\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub <= 3) * 100 / n,
+        np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n))
 
 if __name__ == "__main__":
     main()
