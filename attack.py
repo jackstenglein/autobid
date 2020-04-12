@@ -59,14 +59,19 @@ class TopicData:
         self.rev_top = {}
         self.sub_top = {}
         self.top_wds = {}
+        self.avg_top_probs = []
 
     def populate(self, m, reviewers, submissions):
+        self.avg_top_probs = [0 for _ in range(m.num_topics)]
+        num_revs = len(reviewers)
         for rev in tqdm(reviewers):
             self.rev_top[rev.name()] = sorted(m[m.id2word.doc2bow(rev.words)],
                     key = lambda a: -1 * a[1])
+            for t_id, t_prob in self.rev_top[rev.name()]:
+                self.avg_top_probs[t_id] += t_prob / num_revs
         for sub in tqdm(submissions):
             self.sub_top[sub.name] = m[m.id2word.doc2bow(sub.words)]
-        for t_id, wds in tqdm(m.show_topics(num_topics=m.num_topics, formatted=False)):
+        for t_id, wds in tqdm(m.show_topics(num_topics=m.num_topics, num_words=20, formatted=False)):
             self.top_wds[t_id] = wds
 
     @classmethod
@@ -145,18 +150,18 @@ def adv_word_probs_for_rev(rev, td):
     # Get topics for the reviewer
     rev_top_list = td.rev_top[rev.name()]
     wds_prob = {}
-    s = 0
-    for t_id, t_prob in rev_top_list[:5]:
+    for t_id, t_prob in rev_top_list[:3]:
         # Get words contributing to each topic
         t_wds = td.top_wds[t_id]
-        for w, w_prob in t_wds:
-            # Weight each word by the topic's probability and the word's
-            # contribution to that topic
+        for w, w_prob in t_wds[:10]:
             if w not in wds_prob:
                 wds_prob[w] = 0
-            prob = t_prob * w_prob
-            wds_prob[w] += prob
-            s += prob
+            # Weight each word by the topic's probability 
+            prob = t_prob
+            wds_prob[w] = max(wds_prob[w], prob)
+    s = 0
+    for w in wds_prob:
+        s += wds_prob[w]
     for w in wds_prob:
         wds_prob[w] = wds_prob[w] / s
     return wds_prob
@@ -168,7 +173,7 @@ def words_from_probs(wds_prob, sub):
     """
     wds = []
     for w in wds_prob:
-        n = int(round(wds_prob[w] * 1 * sub.num_words)) - sub.feature_vector[w]
+        n = int(round(wds_prob[w] * 2 * sub.num_words)) - sub.feature_vector[w]
         if n <= 0:
             continue
         for _ in range(n):
