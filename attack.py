@@ -10,6 +10,14 @@ import math
 import common
 import bid
 
+def filter_reviewers(reviewers, min_publications):
+    result = []
+    for rev in reviewers:
+        if len(rev.pdf_names) >= min_publications:
+            result.append(rev)
+    return result
+
+
 class BidData:
     """
     Class to save bid related data to speed up the experiments.
@@ -29,6 +37,7 @@ class BidData:
 
 
     def populate(self, td, reviewers, submissions):
+        reviewers = filter_reviewers(list(pc.reviewers()), 5)
         self.normalized_bids = np.zeros((len(reviewers), len(submissions)), dtype=np.int)
         for r_idx in trange(len(reviewers)):
             rev = reviewers[r_idx]
@@ -189,14 +198,14 @@ def main():
     # Load all the cached data
     pc = common.PC()
     pc.load("%s/pc.dat" % args.cache)
-    reviewers = list(pc.reviewers())
+    reviewers = filter_reviewers(list(pc.reviewers()), 5)
     submissions = list(bid.load_submissions(args.cache).values())
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
     rev_word_prob = load_adv_word_probs(args.cache)
 
-    n = 500
+    n = 1000
 
     old_sub_rank_in_rev = np.zeros(n, dtype=int)
     old_rev_rank_in_sub = np.zeros(n, dtype=int)
@@ -209,21 +218,20 @@ def main():
 
     for i in trange(n, desc="Trials"):
         r_idx = np.random.randint(0, len(reviewers))
-        s_idx = np.random.randint(0, len(submissions))
-
-        sub = submissions[s_idx]
         rev = reviewers[r_idx]
+
+        sub = None
+        while (sub is None) or (sub.num_words == 0):
+            s_idx = np.random.randint(0, len(submissions))
+            sub = submissions[s_idx]
 
         # Generate new doc based on adversarial word probs for the reviewer
         new_doc = words_from_probs(rev_word_prob[rev.name()], sub)
+
+        old_size += sub.num_words
+        new_size += 1 + len(new_doc) / sub.num_words 
+
         # Generate new bids for this updated submission
-        if sub.num_words == 0:
-            n -= 1
-            print(sub.name)
-            continue
-        else:
-            old_size += sub.num_words
-            new_size += 1 + len(new_doc) / sub.num_words 
         new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc + sub.words)],
                 td, reviewers)
 
@@ -296,6 +304,16 @@ def main():
         np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n))
     print("Top 3\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub <= 3) * 100 / n,
         np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n))
+
+    # Write results to a tsv file
+    with open("%s/experiments.tsv" % args.cache, 'a') as f:
+        f.write(f"%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (
+            n, new_size / n,
+            np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n,
+            np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n,
+            np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n,
+            np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n,
+            ))
 
 if __name__ == "__main__":
     main()
