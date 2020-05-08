@@ -6,9 +6,11 @@ import matplotlib.pyplot as plt
 import multiprocessing
 import pickle
 import math
+import os
 
 import common
 import bid
+import embedder
 
 def filter_reviewers(reviewers, min_publications):
     result = []
@@ -215,6 +217,8 @@ def main():
 
     old_size = 0
     new_size = 0
+    old_pdf_size = 0
+    new_pdf_size = 0
 
     for i in trange(n, desc="Trials"):
         r_idx = np.random.randint(0, len(reviewers))
@@ -230,6 +234,12 @@ def main():
 
         old_size += sub.num_words
         new_size += 1 + len(new_doc) / sub.num_words 
+
+        # Download old pdf from AWS and create the new pdf
+        aws.download_from_aws(sub.name, 'cs380s-security-project', 'original_papers/' + sub.name)
+        embed_words(new_doc, sub.name, 'attack.pdf')
+        old_pdf_size += os.path.getsize(sub.name) # TODO: get file sizes
+        new_pdf_size += 1 + os.path.getsize('attack.pdf') / os.path.getsize(sub.name)
 
         # Generate new bids for this updated submission
         new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc + sub.words)],
@@ -286,6 +296,8 @@ def main():
     print("# trials: %d" % n)
     print("Avg. old size (# words): %.2f" % (old_size / n,))
     print("Avg. new size: %.2fx" % (new_size / n,))
+    print("Avg. old PDF size (bytes): %.2f" % (old_pdf_size / n,))
+    print("Avg. new PDF size: %.2fx" % (new_pdf_size / n,))
     print("\nRank of submission in reviewer's list:")
     print("---------------------------------------")
     print("Stat\t\told\tnew")
@@ -317,4 +329,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
