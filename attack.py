@@ -243,7 +243,7 @@ def main():
             aws.download_from_aws(sub.name, 'cs380s-security-project', 'original_papers/' + sub.name)
             embedder.embed_words(new_doc, sub.name, 'attack.pdf')
             old_pdf_size += os.path.getsize(sub.name)
-            new_pdf_size += 1 + os.path.getsize('attack.pdf') / os.path.getsize(sub.name)
+            new_pdf_size += os.path.getsize('attack.pdf') / os.path.getsize(sub.name)
         except:
             failed_pdfs += 1
             print("Unexpected error:", sys.exc_info()[0])
@@ -311,42 +311,48 @@ def main():
                 rank += 1
         new_rev_rank_in_sub[i] = rank
 
+    trials = n - failed_pdfs
     print()
     print("# reviewers: %d, # submissions: %d" % (len(reviewers),
         len(submissions)))
-    print("# trials: %d" % n)
-    print("Avg. old size (# words): %.2f" % (old_size / n,))
-    print("Avg. new size: %.2fx" % (new_size / n,))
-    print("Avg. old PDF size (bytes): %.2f" % (old_pdf_size / n,))
-    print("Avg. new PDF size: %.2fx" % (new_pdf_size / n,))
+    print("# attempted trials: %d" % n)
+    print("# successful trials: %d" % trials)
     print("# of failed PDFs: %d" % failed_pdfs)
+    print("Avg. old size (# words): %.2f" % (old_size / trials,))
+    print("Avg. new size: %.2fx" % (new_size / trials,))
+    print("Avg. old PDF size (bytes): %.2f" % (old_pdf_size / trials,))
+    print("Avg. new PDF size: %.2fx" % (new_pdf_size / trials,))
     print("\nRank of submission in reviewer's list:")
     print("---------------------------------------")
     print("Stat\t\told\tnew")
     print("Avg\t\t%.2f\t%.2f" % (np.mean(old_sub_rank_in_rev),
         np.mean(new_sub_rank_in_rev)))
-    print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev == 1) * 100 / n,
-        np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n))
-    print("Top 5\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev <= 5) * 100 / n,
-        np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n))
+    print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev == 1) * 100 / trials,
+        np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / trials))
+    print("Top 5\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev <= 5) * 100 / trials,
+        np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / trials))
     print("\nRank of reviewer in submission's list:")
     print("---------------------------------------")
     print("Stat\t\told\tnew")
     print("Avg\t\t%.2f\t%.2f" % (np.mean(old_rev_rank_in_sub),
         np.mean(new_rev_rank_in_sub)))
-    print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub == 1) * 100 / n,
-        np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n))
-    print("Top 3\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub <= 3) * 100 / n,
-        np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n))
+    print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub == 1) * 100 / trials,
+        np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / trials))
+    print("Top 3\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub <= 3) * 100 / trials,
+        np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / trials))
 
     # Write results to a tsv file
     with open("%s/experiments.tsv" % args.cache, 'a') as f:
-        f.write(f"%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (
-            n, new_size / n,
-            np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n,
-            np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n,
-            np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n,
-            np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n,
+        f.write(f"%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (
+            n, 
+            trials, 
+            failed_pdfs * 100 / n, 
+            new_size / trials,
+            new_pdf_size / trials,
+            np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / trials,
+            np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / trials,
+            np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / trials,
+            np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / trials,
             ))
 
 if __name__ == "__main__":
