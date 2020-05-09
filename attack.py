@@ -7,7 +7,9 @@ import multiprocessing
 import pickle
 import math
 import os
+import sys
 
+import aws
 import common
 import bid
 import embedder
@@ -219,6 +221,7 @@ def main():
     new_size = 0
     old_pdf_size = 0
     new_pdf_size = 0
+    failed_pdfs = 0
 
     for i in trange(n, desc="Trials"):
         r_idx = np.random.randint(0, len(reviewers))
@@ -236,10 +239,28 @@ def main():
         new_size += 1 + len(new_doc) / sub.num_words 
 
         # Download old pdf from AWS and create the new pdf
-        aws.download_from_aws(sub.name, 'cs380s-security-project', 'original_papers/' + sub.name)
-        embed_words(new_doc, sub.name, 'attack.pdf')
-        old_pdf_size += os.path.getsize(sub.name) # TODO: get file sizes
-        new_pdf_size += 1 + os.path.getsize('attack.pdf') / os.path.getsize(sub.name)
+        try:
+            aws.download_from_aws(sub.name, 'cs380s-security-project', 'original_papers/' + sub.name)
+            embedder.embed_words(new_doc, sub.name, 'attack.pdf')
+            old_pdf_size += os.path.getsize(sub.name)
+            new_pdf_size += 1 + os.path.getsize('attack.pdf') / os.path.getsize(sub.name)
+        except:
+            failed_pdfs += 1
+            print("Unexpected error:", sys.exc_info()[0])
+            old_size -= sub.num_words
+            new_size -= (1 + len(new_doc) / sub.num_words) 
+            try:
+                os.remove(sub.name)
+                os.remove('attack.pdf')
+            except:
+                pass
+            continue
+
+        try:
+            os.remove(sub.name)
+            os.remove('attack.pdf')
+        except:
+            pass
 
         # Generate new bids for this updated submission
         new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc + sub.words)],
@@ -298,6 +319,7 @@ def main():
     print("Avg. new size: %.2fx" % (new_size / n,))
     print("Avg. old PDF size (bytes): %.2f" % (old_pdf_size / n,))
     print("Avg. new PDF size: %.2fx" % (new_pdf_size / n,))
+    print("# of failed PDFs: %d" % failed_pdfs)
     print("\nRank of submission in reviewer's list:")
     print("---------------------------------------")
     print("Stat\t\told\tnew")
