@@ -186,7 +186,7 @@ def words_from_probs(wds_prob, sub):
     """
     wds = []
     for w in wds_prob:
-        n = int(round(wds_prob[w] * 2 * sub.num_words)) - sub.feature_vector[w]
+        n = int(round(wds_prob[w] * 1 * sub.num_words)) - sub.feature_vector[w]
         if n <= 0:
             continue
         for _ in range(n):
