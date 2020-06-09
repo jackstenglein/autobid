@@ -17,6 +17,14 @@ def filter_reviewers(reviewers, min_publications):
             result.append(rev)
     return result
 
+def filter_submissions(submissions):
+    filtered_submissions = []
+    for sub in submissions:
+        if sub is None or sub.num_words == 0:
+            continue
+        filtered_submissions.append(sub)
+    return filtered_submissions
+
 
 class BidData:
     """
@@ -182,7 +190,8 @@ def words_from_probs(wds_prob, sub):
     """
     wds = []
     for w in wds_prob:
-        n = int(round(wds_prob[w] * 2 * sub.num_words)) - sub.feature_vector[w]
+        # n = int(round(wds_prob[w] * 1 * sub.num_words)) - sub.feature_vector[w]
+        n = int(round(wds_prob[w] * 1 * sub.num_words))# - sub.feature_vector[w]
         if n <= 0:
             continue
         for _ in range(n):
@@ -199,7 +208,7 @@ def main():
     pc = common.PC()
     pc.load("%s/pc.dat" % args.cache)
     reviewers = filter_reviewers(list(pc.reviewers()), 5)
-    submissions = list(bid.load_submissions(args.cache).values())
+    submissions = filter_submissions(list(bid.load_submissions(args.cache).values()))
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
@@ -216,104 +225,118 @@ def main():
     old_size = 0
     new_size = 0
 
-    for i in trange(n, desc="Trials"):
-        r_idx = np.random.randint(0, len(reviewers))
-        rev = reviewers[r_idx]
-
-        sub = None
-        while (sub is None) or (sub.num_words == 0):
-            s_idx = np.random.randint(0, len(submissions))
+    with open("%s/experiments_ava.tsv" % args.cache, 'a') as f:
+        # for i in trange(n, desc="Trials"):
+        for s_idx in trange(len(submissions), desc="Submissions"):
             sub = submissions[s_idx]
+            for r_idx in trange(len(reviewers), desc="Reviewers"):
+            # r_idx = np.random.randint(0, len(reviewers))
+                rev = reviewers[r_idx]
 
-        # Generate new doc based on adversarial word probs for the reviewer
-        new_doc = words_from_probs(rev_word_prob[rev.name()], sub)
+            # sub = None
+            # while (sub is None) or (sub.num_words == 0):
+            #     s_idx = np.random.randint(0, len(submissions))
+            #     sub = submissions[s_idx]
 
-        old_size += sub.num_words
-        new_size += 1 + len(new_doc) / sub.num_words 
+            # Generate new doc based on adversarial word probs for the reviewer
+                new_doc = words_from_probs(rev_word_prob[rev.name()], sub)
 
-        # Generate new bids for this updated submission
-        new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc + sub.words)],
-                td, reviewers)
+                # old_size += sub.num_words
+                # new_size += 1 + len(new_doc) / sub.num_words 
 
-        # Find old rank of sub in rev's list
-        rank = 1
-        for b in bd.normalized_bids[r_idx, :]:
-            if b > bd.normalized_bids[r_idx, s_idx]:
-                rank += 1
-        old_sub_rank_in_rev[i] = rank
+            # # Generate new bids for this updated submission
+            # new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc + sub.words)],
+            #         td, reviewers)
 
-        # Find old rank of rev in sub's list
-        rank = 1
-        for b in bd.normalized_bids[:, s_idx]:
-            if b > bd.normalized_bids[r_idx, s_idx]:
-                rank += 1
-        old_rev_rank_in_sub[i] = rank
+            # Generate new bids for this updated submission
+                new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc)],
+                        td, reviewers)
 
-        # Find new rank of sub in rev's list
-        rank = 1
-        # Normalize new bid using old min and max because we just need to
-        # compare with the old values of same reviewer
-        normalized_new_bid = bd.get_normalizer(
-                bd.rev_min_raw[r_idx], bd.rev_max_raw[r_idx]
-            )(new_bids[r_idx])
-        for si, b in enumerate(bd.normalized_bids[r_idx, :]):
-            if si != s_idx and b > normalized_new_bid:
-                rank += 1
-        new_sub_rank_in_rev[i] = rank
 
-        # Find new rank of rev in sub's list
-        rank = 1
-        # Normalize new bid using new min and max because we need to
-        # compare across different reviewers
-        normalized_new_bid = bd.get_normalizer(
-                min(bd.rev_min_raw[r_idx], new_bids[r_idx]),
-                max(bd.rev_max_raw[r_idx], new_bids[r_idx])
-            )(new_bids[r_idx])
-        for ri, b in enumerate(new_bids):
-            # Normalize new bid using new min and max because we need to
-            # compare across different reviewers
-            b = bd.get_normalizer(
-                    min(bd.rev_min_raw[ri], b),
-                    max(bd.rev_max_raw[ri], b)
-                )(b)
-            if b > normalized_new_bid:
-                rank += 1
-        new_rev_rank_in_sub[i] = rank
+                # Find old rank of sub in rev's list
+                osir = 1
+                for b in bd.normalized_bids[r_idx, :]:
+                    if b > bd.normalized_bids[r_idx, s_idx]:
+                        osir += 1
+                # old_sub_rank_in_rev[i] = rank
 
-    print()
-    print("# reviewers: %d, # submissions: %d" % (len(reviewers),
-        len(submissions)))
-    print("# trials: %d" % n)
-    print("Avg. old size (# words): %.2f" % (old_size / n,))
-    print("Avg. new size: %.2fx" % (new_size / n,))
-    print("\nRank of submission in reviewer's list:")
-    print("---------------------------------------")
-    print("Stat\t\told\tnew")
-    print("Avg\t\t%.2f\t%.2f" % (np.mean(old_sub_rank_in_rev),
-        np.mean(new_sub_rank_in_rev)))
-    print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev == 1) * 100 / n,
-        np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n))
-    print("Top 5\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev <= 5) * 100 / n,
-        np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n))
-    print("\nRank of reviewer in submission's list:")
-    print("---------------------------------------")
-    print("Stat\t\told\tnew")
-    print("Avg\t\t%.2f\t%.2f" % (np.mean(old_rev_rank_in_sub),
-        np.mean(new_rev_rank_in_sub)))
-    print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub == 1) * 100 / n,
-        np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n))
-    print("Top 3\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub <= 3) * 100 / n,
-        np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n))
+                # Find old rank of rev in sub's list
+                oris = 1
+                for b in bd.normalized_bids[:, s_idx]:
+                    if b > bd.normalized_bids[r_idx, s_idx]:
+                        oris += 1
+                # old_rev_rank_in_sub[i] = rank
+
+                # Find new rank of sub in rev's list
+                sir = 1
+                # Normalize new bid using old min and max because we just need to
+                # compare with the old values of same reviewer
+                normalized_new_bid = bd.get_normalizer(
+                        bd.rev_min_raw[r_idx], bd.rev_max_raw[r_idx]
+                    )(new_bids[r_idx])
+                for si, b in enumerate(bd.normalized_bids[r_idx, :]):
+                    if si != s_idx and b > normalized_new_bid:
+                        sir += 1
+                # new_sub_rank_in_rev[i] = rank
+
+                # Find new rank of rev in sub's list
+                ris = 1
+                # Normalize new bid using new min and max because we need to
+                # compare across different reviewers
+                normalized_new_bid = bd.get_normalizer(
+                        min(bd.rev_min_raw[r_idx], new_bids[r_idx]),
+                        max(bd.rev_max_raw[r_idx], new_bids[r_idx])
+                    )(new_bids[r_idx])
+                for ri, b in enumerate(new_bids):
+                    # Normalize new bid using new min and max because we need to
+                    # compare across different reviewers
+                    b = bd.get_normalizer(
+                            min(bd.rev_min_raw[ri], b),
+                            max(bd.rev_max_raw[ri], b)
+                        )(b)
+                    if b > normalized_new_bid:
+                        ris += 1
+                # new_rev_rank_in_sub[i] = rank
+                f.write(f"%d\t%d\t%d\t%d\t%d\t%d\n" % (
+                    s_idx, r_idx,
+                    osir, sir,
+                    oris, ris
+                    ))
+
+    # print()
+    # print("# reviewers: %d, # submissions: %d" % (len(reviewers),
+    #     len(submissions)))
+    # print("# trials: %d" % n)
+    # print("Avg. old size (# words): %.2f" % (old_size / n,))
+    # print("Avg. new size: %.2fx" % (new_size / n,))
+    # print("\nRank of submission in reviewer's list:")
+    # print("---------------------------------------")
+    # print("Stat\t\told\tnew")
+    # print("Avg\t\t%.2f\t%.2f" % (np.mean(old_sub_rank_in_rev),
+    #     np.mean(new_sub_rank_in_rev)))
+    # print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev == 1) * 100 / n,
+    #     np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n))
+    # print("Top 5\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev <= 5) * 100 / n,
+    #     np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n))
+    # print("\nRank of reviewer in submission's list:")
+    # print("---------------------------------------")
+    # print("Stat\t\told\tnew")
+    # print("Avg\t\t%.2f\t%.2f" % (np.mean(old_rev_rank_in_sub),
+    #     np.mean(new_rev_rank_in_sub)))
+    # print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub == 1) * 100 / n,
+    #     np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n))
+    # print("Top 3\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub <= 3) * 100 / n,
+    #     np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n))
 
     # Write results to a tsv file
-    with open("%s/experiments.tsv" % args.cache, 'a') as f:
-        f.write(f"%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (
-            n, new_size / n,
-            np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n,
-            np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n,
-            np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n,
-            np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n,
-            ))
+    # with open("%s/experiments.tsv" % args.cache, 'a') as f:
+    #     f.write(f"%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (
+    #         n, new_size / n,
+    #         np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n,
+    #         np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n,
+    #         np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n,
+    #         np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n,
+    #         ))
 
 if __name__ == "__main__":
     main()
