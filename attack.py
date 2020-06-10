@@ -236,9 +236,9 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
             # Normalize new bid using new min and max because we need to compare across different reviewers
             normalizedNewBids = []
             for ri, b in enumerate(new_bids):
-                b = bd.get_normalizer(
-                    min(bd.rev_min_raw[ri], b),
-                    max(bd.rev_max_raw[ri], b)
+                b = bidData.get_normalizer(
+                    min(bidData.rev_min_raw[ri], b),
+                    max(bidData.rev_max_raw[ri], b)
                 )(b)
                 normalizedNewBids.append( (ri, b) )
 
@@ -281,12 +281,6 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
     print("Other reviewer:     ", otherReviewer)
     print("Reviewer not top 3: ", reviewerNotTop)
     print("Group not top 3:    ", groupNotTop)
-
-
-
-
-
-
 
 
 def main():
