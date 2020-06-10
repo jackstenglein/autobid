@@ -217,10 +217,13 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
 
     # Go through each selected submission
     # Favor each of the top 3 reviewers and record new bids
+    trials = 0
     newReviewers = []
     for subIndex, submission in enumerate(submissions):
         submissionBids = []
         for reviewerBid in reviewers[subIndex]:
+            trials += 1
+
             revIndex = reviewerBid[0]
             reviewer = allReviewers[revIndex]
 
@@ -250,7 +253,39 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
 
     # Print the old reviewers and the new reviewers for comparison
     for oldBids, newBids in zip(reviewers, newReviewers):
-        print("Old bids: ", oldBids, " **** New bids: ", newBids)
+        print("Old bids: ", oldBids, "  New bids: ", newBids)
+
+    # Count stats
+    successful = 0     # Number of trials where selected reviewer is in top 3 and other two aren't
+    otherReviewer = 0  # Number of trials where selected reviewer is in top 3, but others also are there
+    reviewerNotTop = 0 # Number of trials where selected reviewer is not in the top 3, but one or more of the other two are
+    groupNotTop = 0    # Number of trials where none of the old top reviewers are in the top 3
+
+    for paperIndex, paperBids in enumerate(newReviewers):
+        for experimentIndex, newBids in enumerate(paperBids):
+            favoredReviewer = reviewers[paperIndex][experimentIndex]
+            survivingReviewers = filter(lambda newBid: newBid[0] in reviewers[paperIndex], newBids)
+
+            if len(survivingReviewers) == 0:
+                groupNotTop += 1
+            elif favoredReviewer not in survivingReviewers:
+                reviewerNotTop += 1
+            elif len(survivingReviewers) == 1:
+                successful += 1
+            elif len(survivingReviewers) > 1:
+                otherReviewer += 1
+
+    print("")
+    print("Total trials:       ", trials)
+    print("Successful:         ", successful)
+    print("Other reviewer:     ", otherReviewer)
+    print("Reviewer not top 3: ", reviewerNotTop)
+    print("Group not top 3:    ", groupNotTop)
+
+
+
+
+
 
 
 
