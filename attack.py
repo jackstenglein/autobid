@@ -198,6 +198,10 @@ def words_from_probs(wds_prob, sub):
             wds.append(w)
     return wds
 
+def experiment1(bd):
+    print("Bid data: ", bd)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Attack Autobid')
     parser.add_argument('-c', '--cache', help="Directory storing the pickled data about reviewers, submissions, and LDA model", required=True)
@@ -212,6 +216,9 @@ def main():
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
+    experiment1(bd)
+    return 0
+
     rev_word_prob = load_adv_word_probs(args.cache)
 
     n = 1000
@@ -340,4 +347,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
