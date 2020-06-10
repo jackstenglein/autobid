@@ -208,27 +208,33 @@ def main():
     pc = common.PC()
     pc.load("%s/pc.dat" % args.cache)
     reviewers = filter_reviewers(list(pc.reviewers()), 5)
-    submissions = filter_submissions(list(bid.load_submissions(args.cache).values()))
+    submissions = list(bid.load_submissions(args.cache).values())
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
+
+    assert len(reviewers) == bd.normalized_bids.shape[0]
+    assert len(submissions) == bd.normalized_bids.shape[1]
+
     rev_word_prob = load_adv_word_probs(args.cache)
 
-    n = 1000
+    # n = 1000
 
-    old_sub_rank_in_rev = np.zeros(n, dtype=int)
-    old_rev_rank_in_sub = np.zeros(n, dtype=int)
+    # old_sub_rank_in_rev = np.zeros(n, dtype=int)
+    # old_rev_rank_in_sub = np.zeros(n, dtype=int)
 
-    new_sub_rank_in_rev = np.zeros(n, dtype=int)
-    new_rev_rank_in_sub = np.zeros(n, dtype=int)
+    # new_sub_rank_in_rev = np.zeros(n, dtype=int)
+    # new_rev_rank_in_sub = np.zeros(n, dtype=int)
 
-    old_size = 0
-    new_size = 0
+    # old_size = 0
+    # new_size = 0
 
     with open("%s/experiments_ava.tsv" % args.cache, 'a') as f:
         # for i in trange(n, desc="Trials"):
         for s_idx in trange(len(submissions), desc="Submissions"):
             sub = submissions[s_idx]
+            if sub is None or sub.num_words == 0:
+                continue
             for r_idx in trange(len(reviewers), desc="Reviewers"):
             # r_idx = np.random.randint(0, len(reviewers))
                 rev = reviewers[r_idx]
