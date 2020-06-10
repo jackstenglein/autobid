@@ -198,7 +198,7 @@ def words_from_probs(wds_prob, sub):
             wds.append(w)
     return wds
 
-def experiment1(allSubmissions, allReviewers, bidData, topicData):
+def experiment1(allSubmissions, allReviewers, model, bidData, topicData):
 
     # Select only submissions with close enough bids
     # Top 3 reviewers must have a score greater than 96
@@ -213,9 +213,45 @@ def experiment1(allSubmissions, allReviewers, bidData, topicData):
             submissions.append(allSubmissions[subIndex])
             reviewers.append(submissionBids[0:3])
     print("Number of selected submissions: ", len(submissions))
-    print("Reviewers: ", reviewers)
+    # print("Reviewers: ", reviewers)
 
     # Go through each selected submission
+    # Favor each of the top 3 reviewers and record new bids
+    newReviewers = []
+    for subIndex, submission in enumerate(submissions):
+        submissionBids = []
+        for reviewerBid in reviewers[subIndex]:
+            revIndex = reviewerBid[0]
+            reviewer = allReviewers[revIndex]
+
+            # Generate new doc based on adversarial word probs for the reviewer
+            new_doc = words_from_probs(rev_word_prob[reviewer.name()], submission) 
+
+            # Generate new bids for this updated submission
+            new_bids = bids_for_doc(model[model.id2word.doc2bow(new_doc)], topicData, allReviewers)
+
+            # Normalize new bid using new min and max because we need to compare across different reviewers
+            normalizedNewBids = []
+            for ri, b in enumerate(new_bids):
+                b = bd.get_normalizer(
+                    min(bd.rev_min_raw[ri], b),
+                    max(bd.rev_max_raw[ri], b)
+                )(b)
+                normalizedNewBids.append( (ri, b) )
+
+            # Get the top 3 reviewers for the updated submission
+            normalizedNewBids = sorted(normalizedNewBids, reverse=True, key=lambda bid: bid[1])
+            submissionBids.append(normalizedNewBids[0:3])
+        newReviewers.append(submissionBids)
+
+    if len(reviewers) != len(newReviewers):
+        print("Reviewer lengths do not match.")
+        return
+
+    # Print the old reviewers and the new reviewers for comparison
+    for oldBids, newBids in zip(reviewers, newReviewers):
+        print("Old bids: ", oldBids, " **** New bids: ", newBids)
+
 
 
 def main():
@@ -232,7 +268,7 @@ def main():
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
-    experiment1(submissions, reviewers, bd, td)
+    experiment1(submissions, reviewers, m, bd, td)
     return 0
 
     rev_word_prob = load_adv_word_probs(args.cache)
