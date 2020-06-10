@@ -203,7 +203,7 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
     # Select only submissions with close enough bids
     # Top 3 reviewers must have a score greater than 96
     submissions = []
-    reviewers = []
+    oldBids = []
     for subIndex, submission in enumerate(allSubmissions):
         submissionBids = []
         for revIndex, bid in enumerate(bidData.normalized_bids[:, subIndex]):
@@ -211,17 +211,17 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
         submissionBids = sorted(submissionBids, reverse=True, key=lambda subBid: subBid[1])
         if submissionBids[2][1] > 96:
             submissions.append(allSubmissions[subIndex])
-            reviewers.append(submissionBids[0:3])
+            oldBids.append(submissionBids[0:3])
     print("Number of selected submissions: ", len(submissions))
-    # print("Reviewers: ", reviewers)
+    # print("oldBids: ", oldBids)
 
     # Go through each selected submission
     # Favor each of the top 3 reviewers and record new bids
     trials = 0
-    newReviewers = []
+    newBids = []
     for subIndex, submission in enumerate(submissions):
         submissionBids = []
-        for reviewerBid in reviewers[subIndex]:
+        for reviewerBid in oldBids[subIndex]:
             trials += 1
 
             revIndex = reviewerBid[0]
@@ -245,15 +245,15 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
             # Get the top 3 reviewers for the updated submission
             normalizedNewBids = sorted(normalizedNewBids, reverse=True, key=lambda bid: bid[1])
             submissionBids.append(normalizedNewBids[0:3])
-        newReviewers.append(submissionBids)
+        newBids.append(submissionBids)
 
-    if len(reviewers) != len(newReviewers):
+    if len(oldBids) != len(newBids):
         print("Reviewer lengths do not match.")
         return
 
-    # Print the old reviewers and the new reviewers for comparison
-    for oldBids, newBids in zip(reviewers, newReviewers):
-        print("Old bids: ", oldBids, "  New bids: ", newBids)
+    # Print the old bids and the new bids per paper for manual comparison
+    for oldPaperBids, newPaperBids in zip(oldBids, newBids):
+        print("Old bids: ", oldPaperBids, "  New bids: ", newPaperBids)
 
     # Count stats
     successful = 0     # Number of trials where selected reviewer is in top 3 and other two aren't
@@ -261,10 +261,11 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
     reviewerNotTop = 0 # Number of trials where selected reviewer is not in the top 3, but one or more of the other two are
     groupNotTop = 0    # Number of trials where none of the old top reviewers are in the top 3
 
-    for paperIndex, paperBids in enumerate(newReviewers):
-        for experimentIndex, newBids in enumerate(paperBids):
-            favoredReviewer = reviewers[paperIndex][experimentIndex]
-            survivingReviewers = filter(lambda newBid: newBid[0] in reviewers[paperIndex], newBids)
+    for paperIndex, submissionBids in enumerate(newBids):
+        for experimentIndex, newPaperBids in enumerate(submissionBids):
+            favoredReviewer = oldBids[paperIndex][experimentIndex]
+            oldReviewers = list(map(lambda oldBid: oldBid[0], oldBids[paperIndex]))
+            survivingReviewers = list(filter(lambda newBid: newBid[0] in oldReviewers, newBids))
 
             if len(survivingReviewers) == 0:
                 groupNotTop += 1
