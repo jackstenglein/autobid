@@ -198,7 +198,7 @@ def words_from_probs(wds_prob, sub):
             wds.append(w)
     return wds
 
-def experiment1(allSubmissions, allReviewers, model, bidData, topicData):
+def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewerWordProbability):
 
     # Select only submissions with close enough bids
     # Top 3 reviewers must have a score greater than 96
@@ -225,7 +225,7 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData):
             reviewer = allReviewers[revIndex]
 
             # Generate new doc based on adversarial word probs for the reviewer
-            new_doc = words_from_probs(rev_word_prob[reviewer.name()], submission) 
+            new_doc = words_from_probs(reviewerWordProbability[reviewer.name()], submission) 
 
             # Generate new bids for this updated submission
             new_bids = bids_for_doc(model[model.id2word.doc2bow(new_doc)], topicData, allReviewers)
@@ -268,10 +268,9 @@ def main():
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
-    experiment1(submissions, reviewers, m, bd, td)
-    return 0
-
     rev_word_prob = load_adv_word_probs(args.cache)
+    experiment1(submissions, reviewers, m, bd, td, rev_word_prob)
+    return 0
 
     n = 1000
 
