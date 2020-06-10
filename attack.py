@@ -206,11 +206,11 @@ def experiment1(allSubmissions, allReviewers, bidData, topicData):
     reviewers = []
     for subIndex, submission in enumerate(allSubmissions):
         submissionBids = []
-        for revIndex, bid in enumerate(bidData.normalized_bids[:, subIdx]):
+        for revIndex, bid in enumerate(bidData.normalized_bids[:, subIndex]):
             submissionBids.append( (revIndex, bid) )
         submissionBids = sorted(submissionBids, reverse=True, key=lambda subBid: subBid[1])
         if submissionBids[2][1] > 96:
-            submissions.append(allSubmissions[subIdx])
+            submissions.append(allSubmissions[subIndex])
             reviewers.append(submissionBids[0:3])
     print("Number of selected submissions: ", len(submissions))
     print("Reviewers: ", reviewers)
@@ -232,7 +232,7 @@ def main():
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
-    experiment1(bd)
+    experiment1(submissions, reviewers, bd, td)
     return 0
 
     rev_word_prob = load_adv_word_probs(args.cache)
