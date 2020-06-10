@@ -198,8 +198,24 @@ def words_from_probs(wds_prob, sub):
             wds.append(w)
     return wds
 
-def experiment1(bd):
-    print("Bid data: ", bd)
+def experiment1(allSubmissions, allReviewers, bidData, topicData):
+
+    # Select only submissions with close enough bids
+    # Top 3 reviewers must have a score greater than 96
+    submissions = []
+    reviewers = []
+    for subIndex, submission in enumerate(allSubmissions):
+        submissionBids = []
+        for revIndex, bid in enumerate(bidData.normalized_bids[:, subIdx]):
+            submissionBids.append( (revIndex, bid) )
+        submissionBids = sorted(submissionBids, reverse=True, key=lambda subBid: subBid[1])
+        if submissionBids[2][1] > 96:
+            submissions.append(allSubmissions[subIdx])
+            reviewers.append(submissionBids[0:3])
+    print("Number of selected submissions: ", len(submissions))
+    print("Reviewers: ", reviewers)
+
+    # Go through each selected submission
 
 
 def main():
