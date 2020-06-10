@@ -263,18 +263,26 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
 
     for paperIndex, submissionBids in enumerate(newBids):
         for experimentIndex, newPaperBids in enumerate(submissionBids):
-            favoredReviewer = oldBids[paperIndex][experimentIndex]
+            favoredReviewer = oldBids[paperIndex][experimentIndex][0]
             oldReviewers = list(map(lambda oldBid: oldBid[0], oldBids[paperIndex]))
-            survivingReviewers = list(filter(lambda newBid: newBid[0] in oldReviewers, newBids))
+            survivingReviewers = list(map(lambda bid: bid[0], filter(lambda newBid: newBid[0] in oldReviewers, newPaperBids)))
+            #print("Old reviewers: ", oldReviewers)
+            #print("Surviving reviewers: ", survivingReviewers)
+            #print("Favored reviewer: ", favoredReviewer)
 
             if len(survivingReviewers) == 0:
                 groupNotTop += 1
+                #print("Group not top")
             elif favoredReviewer not in survivingReviewers:
                 reviewerNotTop += 1
+                #print("Reviewer not top")
             elif len(survivingReviewers) == 1:
                 successful += 1
+                #print("Successful")
             elif len(survivingReviewers) > 1:
                 otherReviewer += 1
+                #print("Other reviewer")
+            #print("")
 
     print("")
     print("Total trials:       ", trials)
