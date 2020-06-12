@@ -183,6 +183,50 @@ def adv_word_probs_for_rev(rev, td):
         wds_prob[w] = wds_prob[w] / s
     return wds_prob
 
+
+def adversarialWords(favoredReviewer, allReviewers, topicData):
+
+    probabilityDifferences = []
+
+    # Go through each topic for the favored reviewer
+    favoredTopicList = topicData.rev_top[favoredReviewer.name()]
+    for topicId, favoredTopicProbability in favoredTopicList:
+
+        probabilityDifference = 0
+
+        # Go through each of the other reviewers and accumulate the differences in 
+        # probability for this topic
+        for reviewer in allReviewers:
+            if reviewer.gs_id == favoredReviewer.gs_id:
+                print("Skipping favored reviewer")
+                continue
+            reviewerTopicDict = dict(topicData.rev_top[reviewer.name()])
+            reviewerTopicProbability = reviewerTopicDict.get(topicId, 0)
+            probabilityDifference += (favoredTopicProbability - reviewerTopicProbability)
+        
+        probabilityDifferences.append( (topicId, probabilityDifference) )
+        
+    print("Probability differences: ", probabilityDifferences)
+
+    # for reviewer in allReviewers:
+    #     if reviewer.gs_id == favoredReviewer.gs_id:
+    #         print("Skipping favored reviewer")
+    #         continue
+        
+
+
+
+    # bids = []
+    # for rev in reviewers:
+    #     rev_top_dict = dict(td.rev_top[rev.name()])
+    #     score = 0
+    #     for t_id, t_prob in doc_top_list:
+    #         score += rev_top_dict.get(t_id, 0) * t_prob
+    #     bids.append(score)
+    # return bids
+
+
+
 def words_from_probs(wds_prob, sub):
     """
     Return list of adversarial words for `sub` as per their probability
@@ -311,7 +355,8 @@ def main():
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
     rev_word_prob = load_adv_word_probs(args.cache)
-    experiment1(submissions, reviewers, m, bd, td, rev_word_prob)
+    #experiment1(submissions, reviewers, m, bd, td, rev_word_prob)
+    adversarialWords(reviewers[0], reviewers, td)
     return 0
 
     n = 1000
