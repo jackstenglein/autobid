@@ -213,12 +213,10 @@ def adversarialWords(favoredReviewer, allReviewers, topicData):
         
         topicWords = topicData.top_wds[topicId]
         for word, _ in topicWords[:10]:
-            if w not in wordProbabilities:
+            if word not in wordProbabilities:
                 wordProbabilities[word] = 0
             # Weight each word by the topic's probability difference
             wordProbabilities[word] = max(wordProbabilities[word], probabilityDifference)
-
-    print("Total positive difference ", positiveDifference)
 
     total = 0
     for word in wordProbabilities:
@@ -289,7 +287,8 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
             reviewer = allReviewers[revIndex]
 
             # Generate new doc based on adversarial word probs for the reviewer
-            new_doc = words_from_probs(reviewerWordProbability[reviewer.name()], submission) 
+            wordProbabilities = adversarialWords(reviewer, allReviewers, topicData)
+            new_doc = words_from_probs(wordProbabilities, submission) 
 
             # Generate new bids for this updated submission
             new_bids = bids_for_doc(model[model.id2word.doc2bow(new_doc)], topicData, allReviewers)
@@ -371,8 +370,8 @@ def main():
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
     rev_word_prob = load_adv_word_probs(args.cache)
-    #experiment1(submissions, reviewers, m, bd, td, rev_word_prob)
-    adversarialWords(reviewers[0], reviewers, td)
+    experiment1(submissions, reviewers, m, bd, td, rev_word_prob)
+    # adversarialWords(reviewers[0], reviewers, td)
     return 0
 
     n = 1000
