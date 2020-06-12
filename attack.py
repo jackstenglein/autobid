@@ -204,7 +204,7 @@ def adversarialWords(favoredReviewer, allReviewers, topicData):
         probabilityDifferences.append( (topicId, probabilityDifference) )
 
     probabilityDifferences = sorted(probabilityDifferences, reverse=True, key=lambda topic: topic[1])
-    print("Probability differences: ", probabilityDifferences)
+    # print("Probability differences: ", probabilityDifferences)
     
     wordProbabilities = {}
     for topicId, probabilityDifference in probabilityDifferences:
@@ -293,10 +293,21 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
             revIndex = reviewerBid[0]
             reviewer = allReviewers[revIndex]
 
-
             # Generate new doc based on adversarial word probs for the reviewer
-            wordProbabilities = adversarialWords(reviewer, topReviewers[subIndex], topicData)
-            new_doc = words_from_probs(wordProbabilities, submission) 
+            fullWordProbabilities = adversarialWords(reviewer, allReviewers, topicData)
+            topWordProbabilities = adversarialWords(reviewer, topReviewers[subIndex], topicData)
+
+            topMultiplier = 1
+            finalWordProbabilities = {}
+            for word in fullWordProbabilities:
+                finalWordProbabilities[word] = fullWordProbabilities[word]
+            for word in topWordProbabilities:
+                if word not in finalWordProbabilities:
+                    finalWordProbabilities[word] = topWordProbabilities[word] * topMultiplier
+                else:
+                    finalWordProbabilities[word] = max(finalWordProbabilities[word], topWordProbabilities[word] * topMultiplier)
+
+            new_doc = words_from_probs(finalWordProbabilities, submission) 
 
             # Generate new bids for this updated submission
             new_bids = bids_for_doc(model[model.id2word.doc2bow(new_doc)], topicData, allReviewers)
