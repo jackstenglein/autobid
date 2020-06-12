@@ -277,8 +277,6 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
             topReviewers.append(topReviews)
 
     print("Number of selected submissions: ", len(submissions))
-    print("Top reviewers: ", topReviewers)
-    return
     # print("oldBids: ", oldBids)
 
     # Go through each selected submission
@@ -297,7 +295,7 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
 
 
             # Generate new doc based on adversarial word probs for the reviewer
-            wordProbabilities = adversarialWords(reviewer, allReviewers, topicData)
+            wordProbabilities = adversarialWords(reviewer, topReviewers, topicData)
             new_doc = words_from_probs(wordProbabilities, submission) 
 
             # Generate new bids for this updated submission
