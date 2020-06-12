@@ -295,7 +295,7 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
 
 
             # Generate new doc based on adversarial word probs for the reviewer
-            wordProbabilities = adversarialWords(reviewer, topReviewers, topicData)
+            wordProbabilities = adversarialWords(reviewer, topReviewers[subIndex], topicData)
             new_doc = words_from_probs(wordProbabilities, submission) 
 
             # Generate new bids for this updated submission
