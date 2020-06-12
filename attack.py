@@ -205,7 +205,8 @@ def adversarialWords(favoredReviewer, allReviewers, topicData):
             probabilityDifference += (favoredTopicProbability - reviewerTopicProbability)
         
         probabilityDifferences.append( (topicId, probabilityDifference) )
-        
+
+    probabilityDifferences = sorted(probabilityDifferences, reverse=True, key=lambda topic: topic[1])
     print("Probability differences: ", probabilityDifferences)
 
     # for reviewer in allReviewers:
