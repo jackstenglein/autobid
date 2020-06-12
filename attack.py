@@ -225,7 +225,7 @@ def adversarialWords(favoredReviewer, allReviewers, topicData):
     for word in wordProbabilities:
         wordProbabilities[word] = wordProbabilities[word] / total
 
-    print("Word probabilities: ", wordProbabilities)
+    # print("Word probabilities: ", wordProbabilities)
     return wordProbabilities
     
 
@@ -262,6 +262,7 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
     # Top 3 reviewers must have a score greater than 96
     submissions = []
     oldBids = []
+    topReviewers = []
     for subIndex, submission in enumerate(allSubmissions):
         submissionBids = []
         for revIndex, bid in enumerate(bidData.normalized_bids[:, subIndex]):
@@ -270,7 +271,14 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
         if submissionBids[2][1] > 96:
             submissions.append(allSubmissions[subIndex])
             oldBids.append(submissionBids[0:3])
+            topReviews = []
+            for submissionBid in submissionBids[0:10]:
+                topReviews.append(allReviewers[submissionBid[0]])
+            topReviewers.append(topReviews)
+
     print("Number of selected submissions: ", len(submissions))
+    print("Top reviewers: ", topReviewers)
+    return
     # print("oldBids: ", oldBids)
 
     # Go through each selected submission
@@ -280,11 +288,13 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
     num100 = 0
     for subIndex, submission in enumerate(submissions):
         submissionBids = []
+
         for reviewerBid in oldBids[subIndex]:
             trials += 1
 
             revIndex = reviewerBid[0]
             reviewer = allReviewers[revIndex]
+
 
             # Generate new doc based on adversarial word probs for the reviewer
             wordProbabilities = adversarialWords(reviewer, allReviewers, topicData)
