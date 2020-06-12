@@ -219,6 +219,7 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
     # Favor each of the top 3 reviewers and record new bids
     trials = 0
     newBids = []
+    num100 = 0
     for subIndex, submission in enumerate(submissions):
         submissionBids = []
         for reviewerBid in oldBids[subIndex]:
@@ -241,6 +242,8 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
                     max(bidData.rev_max_raw[ri], b)
                 )(b)
                 normalizedNewBids.append( (ri, b) )
+                if b == 100:
+                    num100 += 1
 
             # Get the top 3 reviewers for the updated submission
             normalizedNewBids = sorted(normalizedNewBids, reverse=True, key=lambda bid: bid[1])
@@ -290,6 +293,7 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
     print("Other reviewer:     ", otherReviewer)
     print("Reviewer not top 3: ", reviewerNotTop)
     print("Group not top 3:    ", groupNotTop)
+    print("Avg. number of 100 bids: ", num100/trials)
 
 
 def main():
