@@ -297,7 +297,7 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
             fullWordProbabilities = adversarialWords(reviewer, allReviewers, topicData)
             topWordProbabilities = adversarialWords(reviewer, topReviewers[subIndex], topicData)
 
-            topMultiplier = 1
+            topMultiplier = 0.69
             finalWordProbabilities = {}
             for word in fullWordProbabilities:
                 finalWordProbabilities[word] = fullWordProbabilities[word]
@@ -333,8 +333,8 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
         return
 
     # Print the old bids and the new bids per paper for manual comparison
-    for oldPaperBids, newPaperBids in zip(oldBids, newBids):
-        print("Old bids: ", oldPaperBids, "  New bids: ", newPaperBids)
+    # for oldPaperBids, newPaperBids in zip(oldBids, newBids):
+    #     print("Old bids: ", oldPaperBids, "  New bids: ", newPaperBids)
 
     # Count stats
     successful = 0     # Number of trials where selected reviewer is in top 3 and other two aren't
