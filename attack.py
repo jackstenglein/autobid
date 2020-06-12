@@ -197,9 +197,6 @@ def adversarialWords(favoredReviewer, allReviewers, topicData):
         # Go through each of the other reviewers and accumulate the differences in 
         # probability for this topic
         for reviewer in allReviewers:
-            if reviewer.gs_id == favoredReviewer.gs_id:
-                print("Skipping favored reviewer")
-                continue
             reviewerTopicDict = dict(topicData.rev_top[reviewer.name()])
             reviewerTopicProbability = reviewerTopicDict.get(topicId, 0)
             probabilityDifference += (favoredTopicProbability - reviewerTopicProbability)
@@ -208,12 +205,31 @@ def adversarialWords(favoredReviewer, allReviewers, topicData):
 
     probabilityDifferences = sorted(probabilityDifferences, reverse=True, key=lambda topic: topic[1])
     print("Probability differences: ", probabilityDifferences)
-
-    # for reviewer in allReviewers:
-    #     if reviewer.gs_id == favoredReviewer.gs_id:
-    #         print("Skipping favored reviewer")
-    #         continue
+    
+    wordProbabilities = {}
+    for topicId, probabilityDifference in probabilityDifferences:
+        if probabilityDifference <= 0:
+            break
         
+        topicWords = topicData.top_wds[topicId]
+        for word, _ in topicWords[:10]:
+            if w not in wordProbabilities:
+                wordProbabilities[word] = 0
+            # Weight each word by the topic's probability difference
+            wordProbabilities[word] = max(wordProbabilities[word], probabilityDifference)
+
+    print("Total positive difference ", positiveDifference)
+
+    total = 0
+    for word in wordProbabilities:
+        total += wordProbabilities[word]
+    
+    for word in wordProbabilities:
+        wordProbabilities[word] = wordProbabilities[word] / total
+
+    print("Word probabilities: ", wordProbabilities)
+    return wordProbabilities
+    
 
 
 
@@ -225,7 +241,6 @@ def adversarialWords(favoredReviewer, allReviewers, topicData):
     #         score += rev_top_dict.get(t_id, 0) * t_prob
     #     bids.append(score)
     # return bids
-
 
 
 def words_from_probs(wds_prob, sub):
