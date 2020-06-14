@@ -469,7 +469,6 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
 
 
 
-
 def main():
     parser = argparse.ArgumentParser(description='Attack Autobid')
     parser.add_argument('-c', '--cache', help="Directory storing the pickled data about reviewers, submissions, and LDA model", required=True)
