@@ -465,10 +465,10 @@ def main():
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
-    rev_word_prob = load_adv_word_probs(args.cache)
+    # rev_word_prob = load_adv_word_probs(args.cache)
     # experiment1(submissions, reviewers, m, bd, td, rev_word_prob)
     # adversarialWords(reviewers[0], reviewers, td)
-    experiment5(submissions, reviewers, model, bidData, topicData)
+    experiment5(submissions, reviewers, m, bd, td)
     return 0
 
     n = 1000
