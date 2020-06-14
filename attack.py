@@ -390,7 +390,7 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
         originalSubmissionRank = 1
         for bid in bidData.normalized_bids[originalReviewerIndex, :]:
             if bid > bidData.normalized_bids[originalReviewerIndex, subIndex]:
-                osir += 1
+                originalSubmissionRank += 1
         if originalSubmissionRank <= 5:
             trialsWithTopSfr += 1
         
