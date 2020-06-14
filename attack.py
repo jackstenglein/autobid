@@ -204,7 +204,7 @@ def adversarialWords(favoredReviewer, allReviewers, topicData, avoid=False):
         probabilityDifferences.append( (topicId, probabilityDifference) )
 
     probabilityDifferences = sorted(probabilityDifferences, reverse=(not avoid), key=lambda topic: topic[1])
-    # print("Probability differences: ", probabilityDifferences)
+    print("Probability differences: ", probabilityDifferences)
     
     wordProbabilities = {}
     for topicId, probabilityDifference in probabilityDifferences:
@@ -216,7 +216,7 @@ def adversarialWords(favoredReviewer, allReviewers, topicData, avoid=False):
             if word not in wordProbabilities:
                 wordProbabilities[word] = 0
             # Weight each word by the topic's probability difference
-            wordProbabilities[word] = max(wordProbabilities[word], probabilityDifference)
+            wordProbabilities[word] = max(wordProbabilities[word], abs(probabilityDifference))
 
     total = 0
     for word in wordProbabilities:
