@@ -373,7 +373,7 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
     submissionRankSum = 0   # The sum of the ranks of the new submissions in their reviewer's lists.
     reviewerRankSum = 0     # The sum of the ranks of the reviewers in the new submissions' lists.
 
-    for subIndex, submission in enumerate(allSubmissions):
+    for subIndex, submission in tqdm(enumerate(allSubmissions), total=len(allSubmissions)):
         totalTrials += 1
         
         # Find the original top reviewer for the submission
@@ -445,8 +445,8 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
     print("# trials with top original submission for reviewer: %d" % trialsWithTopSfr)
     print("# trials with top reviewer for new submission: %d" % trialsWithNewTopRfs)
     print("# trials with top new submission for reviewer: %d" % trialsWithNewTopSfr)
-    print("Avg. rank of reviewer in submission's list: %.2f" % reviewerRankSum / totalTrials)
-    print("Avg. rank of submission in reviewer's list: %.2f" % submissionRankSum / totalTrials)
+    print("Avg. rank of reviewer in submission's list: %.2f" % (reviewerRankSum / totalTrials,))
+    print("Avg. rank of submission in reviewer's list: %.2f" % (submissionRankSum / totalTrials,))
     print()
 
 
