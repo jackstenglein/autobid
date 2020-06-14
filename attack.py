@@ -184,7 +184,7 @@ def adv_word_probs_for_rev(rev, td):
     return wds_prob
 
 
-def adversarialWords(favoredReviewer, allReviewers, topicData):
+def adversarialWords(favoredReviewer, allReviewers, topicData, avoid=False):
 
     probabilityDifferences = []
 
@@ -203,12 +203,12 @@ def adversarialWords(favoredReviewer, allReviewers, topicData):
         
         probabilityDifferences.append( (topicId, probabilityDifference) )
 
-    probabilityDifferences = sorted(probabilityDifferences, reverse=True, key=lambda topic: topic[1])
+    probabilityDifferences = sorted(probabilityDifferences, reverse=(not avoid), key=lambda topic: topic[1])
     # print("Probability differences: ", probabilityDifferences)
     
     wordProbabilities = {}
     for topicId, probabilityDifference in probabilityDifferences:
-        if probabilityDifference <= 0:
+        if (avoid and probabilityDifference >= 0) or (not avoid and probabilityDifference <= 0):
             break
         
         topicWords = topicData.top_wds[topicId]
@@ -228,17 +228,6 @@ def adversarialWords(favoredReviewer, allReviewers, topicData):
     # print("Word probabilities: ", wordProbabilities)
     return wordProbabilities
     
-
-
-
-    # bids = []
-    # for rev in reviewers:
-    #     rev_top_dict = dict(td.rev_top[rev.name()])
-    #     score = 0
-    #     for t_id, t_prob in doc_top_list:
-    #         score += rev_top_dict.get(t_id, 0) * t_prob
-    #     bids.append(score)
-    # return bids
 
 
 def words_from_probs(wds_prob, sub):
@@ -374,6 +363,94 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
     print("Avg. number of 100 bids: ", num100/trials)
 
 
+def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
+
+    totalTrials = 0
+    trialsWithTopRfs = 0    # Number of trials where the reviewer is the top in the submission's list. Will be equal to total trials.
+    trialsWithTopSfr = 0    # Number of trials where the submission is the in top 5 bids in the reviewer's list. May not be equal to total trials.
+    trialsWithNewTopRfs = 0 # Number of trials where the reviewer is in the top 3 in the new submission's list.
+    trialsWithNewTopSfr = 0 # Number of trials where the new submission is in the 5 in the reviewer's list.
+    submissionRankSum = 0   # The sum of the ranks of the new submissions in their reviewer's lists.
+    reviewerRankSum = 0     # The sum of the ranks of the reviewers in the new submissions' lists.
+
+    for subIndex, submission in enumerate(allSubmissions):
+        totalTrials += 1
+        
+        # Find the original top reviewer for the submission
+        maxBid = -90
+        originalReviewerIndex = -1
+        for revIndex, bid in enumerate(bidData.normalized_bids[:, subIndex]):
+            if bid > maxBid:
+                maxBid = bid
+                originalReviewerIndex = revIndex
+        originalReviewer = allReviewers[originalReviewerIndex]
+        trialsWithTopRfs += 1
+        
+        # Find the original rank of the submission in the reviewer's list
+        originalSubmissionRank = 1
+        for bid in bidData.normalized_bids[originalReviewerIndex, :]:
+            if bid > bidData.normalized_bids[originalReviewerIndex, subIndex]:
+                osir += 1
+        if originalSubmissionRank <= 5:
+            trialsWithTopSfr += 1
+        
+        # Get word probabilits to avoid the reviewer and generate the new doc
+        wordProbabilities = adversarialWords(originalReviewer, allReviewers, topicData, avoid=True)
+        newDoc = words_from_probs(wordProbabilities, submission)
+
+        # Generate the new bids
+        newBids = bids_for_doc(model[model.id2word.doc2bow(newDoc)], topicData, allReviewers)
+
+        # Find the new rank of the reviewer in the submission's list
+        # Normalize new bid using new min and max because we need to
+        # compare across different reviewers
+        newReviewerRank = 1
+        normalizedReviewerBid = bidData.get_normalizer(
+            min(bidData.rev_min_raw[originalReviewerIndex], newBids[originalReviewerIndex]),
+            max(bidData.rev_max_raw[originalReviewerIndex], newBids[originalReviewerIndex])
+        )(newBids[originalReviewerIndex])
+        for revIndex, bid in enumerate(newBids):
+            bid = bidData.get_normalizer(
+                min(bidData.rev_min_raw[revIndex], bid),
+                max(bd.rev_max_raw[revIndex], bid)
+            )(bid)
+            if bid > normalizedReviewerBid:
+                newReviewerRank += 1
+
+        # Find the new rank of the submission in the reviewer's list
+        # Normalize new bid using old min and max because we just need to
+        # compare with the old values of same reviewer
+        newSubmissionRank = 1
+        normalizedReviewerBid = bidData.get_normalizer(
+            bidData.rev_min_raw[originalReviewerIndex], bidData.rev_max_raw[originalReviewerIndex]
+        )(newBids[originalReviewerIndex])
+        for sIndex, bid in enumerate(bidData.normalized_bids[originalReviewerIndex, :]):
+            if sIndex != subIndex and bid > normalizedReviewerBid:
+                newSubmissionRank += 1
+
+        # Record the stats for this trial
+        submissionRankSum += newSubmissionRank
+        reviewerRankSum += newReviewerRank
+        if newReviewerRank <= 3:
+            trialsWithNewTopRfs += 1
+        if newSubmissionRank <= 5:
+            trialsWithNewTopSfr += 1
+
+    # Print the final stats for all experiments
+    print("**** Experiment 5: Avoiding specific reviewers ****")
+    print()
+    print("# submissions: %d, # reviewers: %d" % (len(allSubmissions), len(allReviewers)))
+    print("# trials: %d" % totalTrials)
+    print("# trials with top reviewer for original submission: %d" % trialsWithTopRfs)
+    print("# trials with top original submission for reviewer: %d" % trialsWithTopSfr)
+    print("# trials with top reviewer for new submission: %d" % trialsWithNewTopRfs)
+    print("# trials with top new submission for reviewer: %d" % trialsWithNewTopSfr)
+    print("Avg. rank of reviewer in submission's list: %.2f" % reviewerRankSum / totalTrials)
+    print("Avg. rank of submission in reviewer's list: %.2f" % submissionRankSum / totalTrials)
+    print()
+
+
+
 def main():
     parser = argparse.ArgumentParser(description='Attack Autobid')
     parser.add_argument('-c', '--cache', help="Directory storing the pickled data about reviewers, submissions, and LDA model", required=True)
@@ -389,8 +466,9 @@ def main():
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
     rev_word_prob = load_adv_word_probs(args.cache)
-    experiment1(submissions, reviewers, m, bd, td, rev_word_prob)
+    # experiment1(submissions, reviewers, m, bd, td, rev_word_prob)
     # adversarialWords(reviewers[0], reviewers, td)
+    experiment5(submissions, reviewers, model, bidData, topicData)
     return 0
 
     n = 1000
