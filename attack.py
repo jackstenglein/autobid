@@ -365,7 +365,7 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
 
 def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
 
-    for i in trange(10, desc="Word sizes"):
+    for i in trange(1, 11, desc="Word sizes"):
         totalTrials = 0
         trialsWithTopRfs = 0    # Number of trials where the reviewer is the top in the submission's list. Will be equal to total trials.
         trialsWithTopSfr = 0    # Number of trials where the submission is the in top 5 bids in the reviewer's list. May not be equal to total trials.
