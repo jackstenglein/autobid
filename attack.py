@@ -204,7 +204,7 @@ def adversarialWords(favoredReviewer, allReviewers, topicData, avoid=False):
         probabilityDifferences.append( (topicId, probabilityDifference) )
 
     probabilityDifferences = sorted(probabilityDifferences, reverse=(not avoid), key=lambda topic: topic[1])
-    print("Probability differences: ", probabilityDifferences)
+    # print("Probability differences: ", probabilityDifferences)
     
     wordProbabilities = {}
     for topicId, probabilityDifference in probabilityDifferences:
@@ -412,7 +412,7 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
         for revIndex, bid in enumerate(newBids):
             bid = bidData.get_normalizer(
                 min(bidData.rev_min_raw[revIndex], bid),
-                max(bd.rev_max_raw[revIndex], bid)
+                max(bidData.rev_max_raw[revIndex], bid)
             )(bid)
             if bid > normalizedReviewerBid:
                 newReviewerRank += 1
