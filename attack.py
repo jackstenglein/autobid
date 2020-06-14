@@ -398,13 +398,13 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
             
             # Get word probabilits to avoid the reviewer and generate the new doc
             wordProbabilities = adversarialWords(originalReviewer, allReviewers, topicData, avoid=True)
-            newDoc = words_from_probs(wordProbabilities, submission, size=i/10)
+            newDoc = words_from_probs(wordProbabilities, submission, size=i)
 
             # Get the new document size
-            newSize += len(newDoc) / submission.num_words 
+            newSize += 1 + len(newDoc) / submission.num_words 
 
             # Generate the new bids
-            newBids = bids_for_doc(model[model.id2word.doc2bow(newDoc)], topicData, allReviewers)
+            newBids = bids_for_doc(model[model.id2word.doc2bow(newDoc + submission.words)], topicData, allReviewers)
 
             # Find the new rank of the reviewer in the submission's list
             # Normalize new bid using new min and max because we need to
@@ -442,9 +442,11 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
                 trialsWithNewTopSfr += 1
 
         # Print the final stats for all experiments
+        print()
         print("**** Experiment 5: Avoiding specific reviewers ****")
         print()
         print("# submissions: %d, # reviewers: %d" % (len(allSubmissions), len(allReviewers)))
+        print("New Doc size: %.2f" % (newSize / totalTrials,))
         print("# trials: %d" % totalTrials)
         print("# trials with top reviewer for original submission: %d" % trialsWithTopRfs)
         print("# trials with top original submission for reviewer: %d" % trialsWithTopSfr)
@@ -455,7 +457,7 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
         print()
 
         # Write results to a tsv file
-        with open("data/experiment5-textextract.tsv", 'a') as f:
+        with open("data/experiment5-originaltext.tsv", 'a') as f:
             f.write(f"%d\t%.2f\t%d\t%d\t%d\t%d\t%.2f\t%.2f\n" % (
                 totalTrials, 
                 newSize / totalTrials,
