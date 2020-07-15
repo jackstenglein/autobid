@@ -283,7 +283,7 @@ def analyze_submissions(submission_file, j):
 ######################################################
 
 def build_lda_model(reviewer_corpus, submission_corpus):
-    model_file = "data/lda.model"
+    model_file = "data/random_lda.model"
     if not os.path.isfile(model_file):
         print("Compiling list of PDFs...")
         
@@ -362,4 +362,3 @@ def main():
 
 if (__name__=="__main__"):
     main()
-
