@@ -147,7 +147,7 @@ def analyze_words(pdf_file):
 
 def analyze_s3_file(filenames):
     (local_filename, s3_filename) = filenames
-    print('Analyzing', local_filename)
+    # print('Analyzing', local_filename)
     aws.download_from_aws(local_filename, 'cs380s-security-project', s3_filename)
     words = analyze_words(local_filename)
     delete_file(local_filename)
@@ -171,10 +171,10 @@ def analyze_reviewer_papers(reviewer):
             # Download the PDF from AWS
             s3_filename = reviewer.s3_filename(pdf_name)
             local_filename = pdf_name + ".pdf"
-            print("Downloading AWS file", s3_filename, "to local file", local_filename)
+            # print("Downloading AWS file", s3_filename, "to local file", local_filename)
             aws.download_from_aws(local_filename, 'cs380s-security-project', s3_filename)
 
-            print("Analyzing ", local_filename)
+            # print("Analyzing ", local_filename)
             pdf_count = Counter()
             try:
                 words = analyze_words(local_filename)
@@ -218,7 +218,7 @@ def analyze_reviewers_papers(pc, j):
         reviewer.feature_vector = feature_vector
         reviewer.words = words
         reviewer.status = "Features"
-        print("Reviewer words:", reviewer.words)
+        # print("Reviewer words:", reviewer.words)
 
     print("Analyzing reviewers' papers complete!")
 
@@ -233,11 +233,11 @@ def analyze_reviewers_papers(pc, j):
 def analyze_submission(pdf_filename):
     s3_filename = 'original_papers/' + pdf_filename
     local_filename = pdf_filename
-    print("Downloading AWS file", s3_filename, "to local file", local_filename)
+    # print("Downloading AWS file", s3_filename, "to local file", local_filename)
     aws.download_from_aws(local_filename, 'cs380s-security-project', s3_filename)
 
     num_words = 0
-    print("Analyzing", pdf_filename)
+    # print("Analyzing", pdf_filename)
     words = analyze_words(pdf_filename)
     delete_file(local_filename)
 
@@ -302,9 +302,9 @@ def build_lda_model(reviewer_corpus, submission_corpus):
 
         print('Analyzing PDFs...')
         results = map(analyze_s3_file, pdf_filenames)
-        print('Analyzing PDFs complete!')
 
         condensed_results = [r for r in results if not r == None]
+        print('Analyzing PDFs complete!')
 
         # turn our tokenized documents into an id <-> term dictionary
         dictionary = corpora.Dictionary(condensed_results)
