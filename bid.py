@@ -221,9 +221,11 @@ def load_submissions(submissions_dir):
     print("Loading submissions complete!")
     return submissions
 
-def load_model(corpus_dir):
-    print("Loading LDA model...")
-    pickle_file = "%s/lda.model" % corpus_dir
+def load_model(corpus_dir, filename=""):
+    if len(filename.strip()) == 0:
+        filename = 'lda.model'
+    pickle_file = os.path.join(corpus_dir, filename)
+    print("Loading LDA model from: " + pickle_file)
     lda_model = gensim.models.ldamodel.LdaModel.load(pickle_file)
     print("Loading LDA model complete")
     return lda_model

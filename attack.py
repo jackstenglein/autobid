@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import multiprocessing
 import pickle
 import math
+import os
 
 import common
 import bid
@@ -92,15 +93,22 @@ class TopicData:
             self.top_wds[t_id] = wds
 
     @classmethod
-    def load(cls, cache_dir):
-        print("Loading topic data...")
-        with open("%s/topic_data.dat" % cache_dir, "rb") as pickler:
+    def load(cls, cache_dir, filename=""):
+        if len(filename.strip()) == 0:
+            filename = 'topic_data.dat'
+        filename = os.path.join(cache_dir, filename)
+        print("Loading topic data from: " + filename)
+        with open(filename, "rb") as pickler:
             res = pickle.load(pickler)
         print("Loading topic data complete!")
         return res
 
-    def save(self, cache_dir):
-        with open("%s/topic_data.dat" % cache_dir, "wb") as pickler:
+    def save(self, cache_dir, filename=""):
+        if len(filename.strip()) == 0:
+            filename = 'topic_data.dat'
+        filename = os.path.join(cache_dir, filename)
+        print("Saving topic data to: " + filename)
+        with open(filename, "wb") as pickler:
             pickle.dump(self, pickler)
 
 def bids_for_rev(rev, td, submissions):
@@ -134,11 +142,15 @@ def bids_for_doc(doc_top_list, td, reviewers):
         bids.append(score)
     return bids
 
-def save_adv_word_probs(reviewers, td, cache_dir):
+def save_adv_word_probs(reviewers, td, cache_dir, filename=""):
     """
     Pre-calculate all adversarial word probabilities and cache the results to
     speedup the experiments
     """
+    if len(filename.strip()) == 0:
+        filename = 'adv_words.dat'
+    filename = os.path.join(cache_dir, filename)
+
     rev_word_prob = {}
     pool = multiprocessing.Pool()
 
@@ -148,14 +160,18 @@ def save_adv_word_probs(reviewers, td, cache_dir):
     print("Done")
     for i, rev in enumerate(reviewers):
         rev_word_prob[rev.name()] = outputs[i]
-    with open("%s/adv_words.dat" % cache_dir, "wb") as pickler:
+    print("Saving adversarial probabilities to: " + filename)
+    with open(filename, "wb") as pickler:
         pickle.dump(rev_word_prob, pickler)
     pool.close()
 
-def load_adv_word_probs(cache_dir):
-    print("Loading adversarial word probabilities...")
+def load_adv_word_probs(cache_dir, filename=""):
+    if len(filename.strip()) == 0:
+        filename = 'adv_words.dat'
+    filename = os.path.join(cache_dir, filename)
+    print("Loading adversarial word probabilities from: " + filename)
     rev_word_prob = {}
-    with open("%s/adv_words.dat" % cache_dir, "rb") as pickler:
+    with open(filename, "rb") as pickler:
         rev_word_prob = pickle.load(pickler)
     print("Loading adversarial word probabilities complete!")
     return rev_word_prob
@@ -173,7 +189,7 @@ def adv_word_probs_for_rev(rev, td):
         for w, w_prob in t_wds[:10]:
             if w not in wds_prob:
                 wds_prob[w] = 0
-            # Weight each word by the topic's probability 
+            # Weight each word by the topic's probability
             prob = t_prob
             wds_prob[w] = max(wds_prob[w], prob)
     s = 0
@@ -182,7 +198,6 @@ def adv_word_probs_for_rev(rev, td):
     for w in wds_prob:
         wds_prob[w] = wds_prob[w] / s
     return wds_prob
-
 
 def adversarialWords(favoredReviewer, allReviewers, topicData, avoid=False):
 
@@ -194,23 +209,23 @@ def adversarialWords(favoredReviewer, allReviewers, topicData, avoid=False):
 
         probabilityDifference = 0
 
-        # Go through each of the other reviewers and accumulate the differences in 
+        # Go through each of the other reviewers and accumulate the differences in
         # probability for this topic
         for reviewer in allReviewers:
             reviewerTopicDict = dict(topicData.rev_top[reviewer.name()])
             reviewerTopicProbability = reviewerTopicDict.get(topicId, 0)
             probabilityDifference += (favoredTopicProbability - reviewerTopicProbability)
-        
+
         probabilityDifferences.append( (topicId, probabilityDifference) )
 
     probabilityDifferences = sorted(probabilityDifferences, reverse=(not avoid), key=lambda topic: topic[1])
     # print("Probability differences: ", probabilityDifferences)
-    
+
     wordProbabilities = {}
     for topicId, probabilityDifference in probabilityDifferences:
         if (avoid and probabilityDifference >= 0) or (not avoid and probabilityDifference <= 0):
             break
-        
+
         topicWords = topicData.top_wds[topicId]
         for word, _ in topicWords[:10]:
             if word not in wordProbabilities:
@@ -221,28 +236,33 @@ def adversarialWords(favoredReviewer, allReviewers, topicData, avoid=False):
     total = 0
     for word in wordProbabilities:
         total += wordProbabilities[word]
-    
+
     for word in wordProbabilities:
         wordProbabilities[word] = wordProbabilities[word] / total
 
     # print("Word probabilities: ", wordProbabilities)
     return wordProbabilities
-    
 
 
-def words_from_probs(wds_prob, sub, size=1):
+
+def words_from_probs(wds_prob, sub, size=1, use_original_words=True):
     """
     Return list of adversarial words for `sub` as per their probability
     distribution
     """
+    if use_original_words:
+        size -= 1
     wds = []
     for w in wds_prob:
-        # n = int(round(wds_prob[w] * 1 * sub.num_words)) - sub.feature_vector[w]
-        n = int(round(wds_prob[w] * size * sub.num_words))# - sub.feature_vector[w]
+        n = int(round(wds_prob[w] * size * sub.num_words))
+        if use_original_words:
+            n -= sub.feature_vector[w]
         if n <= 0:
             continue
         for _ in range(n):
             wds.append(w)
+    if use_original_words:
+        wds += sub.words
     return wds
 
 def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewerWordProbability):
@@ -296,7 +316,7 @@ def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewe
                 else:
                     finalWordProbabilities[word] = max(finalWordProbabilities[word], topWordProbabilities[word] * topMultiplier)
 
-            new_doc = words_from_probs(finalWordProbabilities, submission) 
+            new_doc = words_from_probs(finalWordProbabilities, submission)
 
             # Generate new bids for this updated submission
             new_bids = bids_for_doc(model[model.id2word.doc2bow(new_doc)], topicData, allReviewers)
@@ -377,7 +397,7 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
 
         for subIndex, submission in tqdm(enumerate(allSubmissions), total=len(allSubmissions), desc="Submissions"):
             totalTrials += 1
-            
+
             # Find the original top reviewer for the submission
             maxBid = -90
             originalReviewerIndex = -1
@@ -387,7 +407,7 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
                     originalReviewerIndex = revIndex
             originalReviewer = allReviewers[originalReviewerIndex]
             trialsWithTopRfs += 1
-            
+
             # Find the original rank of the submission in the reviewer's list
             originalSubmissionRank = 1
             for bid in bidData.normalized_bids[originalReviewerIndex, :]:
@@ -395,13 +415,13 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
                     originalSubmissionRank += 1
             if originalSubmissionRank <= 5:
                 trialsWithTopSfr += 1
-            
+
             # Get word probabilits to avoid the reviewer and generate the new doc
             wordProbabilities = adversarialWords(originalReviewer, allReviewers, topicData, avoid=True)
             newDoc = words_from_probs(wordProbabilities, submission, size=i)
 
             # Get the new document size
-            newSize += 1 + len(newDoc) / submission.num_words 
+            newSize += 1 + len(newDoc) / submission.num_words
 
             # Generate the new bids
             newBids = bids_for_doc(model[model.id2word.doc2bow(newDoc + submission.words)], topicData, allReviewers)
@@ -459,7 +479,7 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
         # Write results to a tsv file
         with open("data/experiment5-originaltext.tsv", 'a') as f:
             f.write(f"%d\t%.2f\t%d\t%d\t%d\t%d\t%.2f\t%.2f\n" % (
-                totalTrials, 
+                totalTrials,
                 newSize / totalTrials,
                 trialsWithTopRfs,
                 trialsWithTopSfr,
@@ -469,7 +489,150 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
                 submissionRankSum / totalTrials
             ))
 
+def experiment0(reviewers, submissions, m, td, bd, rev_word_prob,
+        data_filename, n=1000, use_original_words=True):
+    a, b = bd.normalized_bids.shape
+    assert a == len(reviewers)
+    assert b == len(submissions)
+    for sf in range(1, 11):
+        old_sub_rank_in_rev = np.zeros(n, dtype=int)
+        old_rev_rank_in_sub = np.zeros(n, dtype=int)
 
+        new_sub_rank_in_rev = np.zeros(n, dtype=int)
+        new_rev_rank_in_sub = np.zeros(n, dtype=int)
+
+        old_size = 0
+        new_size = 0
+
+        for i in trange(n, desc="Trials"):
+            r_idx = np.random.randint(0, len(reviewers))
+            rev = reviewers[r_idx]
+
+            sub = None
+            while (sub is None) or (sub.num_words == 0):
+                s_idx = np.random.randint(0, len(submissions))
+                sub = submissions[s_idx]
+
+            # Generate new doc based on adversarial word probs for the reviewer
+            new_doc = words_from_probs(rev_word_prob[rev.name()], sub, sf,
+                    use_original_words)
+
+            old_size += sub.num_words
+            new_size += len(new_doc) / sub.num_words
+
+            # Generate new bids for this updated submission
+            new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc)],
+                    td, reviewers)
+
+            # Find old rank of sub in rev's list
+            rank = 1
+            for b in bd.normalized_bids[r_idx, :]:
+                if b > bd.normalized_bids[r_idx, s_idx]:
+                    rank += 1
+            old_sub_rank_in_rev[i] = rank
+
+            # Find old rank of rev in sub's list
+            rank = 1
+            for b in bd.normalized_bids[:, s_idx]:
+                if b > bd.normalized_bids[r_idx, s_idx]:
+                    rank += 1
+            old_rev_rank_in_sub[i] = rank
+
+            # Find new rank of sub in rev's list
+            rank = 1
+            # Normalize new bid using old min and max because we just need to
+            # compare with the old values of same reviewer
+            normalized_new_bid = bd.get_normalizer(
+                    bd.rev_min_raw[r_idx], bd.rev_max_raw[r_idx]
+                )(new_bids[r_idx])
+            for si, b in enumerate(bd.normalized_bids[r_idx, :]):
+                if si != s_idx and b > normalized_new_bid:
+                    rank += 1
+            new_sub_rank_in_rev[i] = rank
+
+            # Find new rank of rev in sub's list
+            rank = 1
+            # Normalize new bid using new min and max because we need to
+            # compare across different reviewers
+            normalized_new_bid = bd.get_normalizer(
+                    min(bd.rev_min_raw[r_idx], new_bids[r_idx]),
+                    max(bd.rev_max_raw[r_idx], new_bids[r_idx])
+                )(new_bids[r_idx])
+            for ri, b in enumerate(new_bids):
+                # Normalize new bid using new min and max because we need to
+                # compare across different reviewers
+                b = bd.get_normalizer(
+                        min(bd.rev_min_raw[ri], b),
+                        max(bd.rev_max_raw[ri], b)
+                    )(b)
+                if b > normalized_new_bid:
+                    rank += 1
+            new_rev_rank_in_sub[i] = rank
+
+        print()
+        print("# reviewers: %d, # submissions: %d" % (len(reviewers),
+            len(submissions)))
+        print("# trials: %d" % n)
+        print("Avg. old size (# words): %.2f" % (old_size / n,))
+        print("Avg. new size: %.2fx" % (new_size / n,))
+        print("\nRank of submission in reviewer's list:")
+        print("---------------------------------------")
+        print("Stat\t\told\tnew")
+        print("Avg\t\t%.2f\t%.2f" % (np.mean(old_sub_rank_in_rev),
+            np.mean(new_sub_rank_in_rev)))
+        print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev == 1) * 100 / n,
+            np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n))
+        print("Top 5\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev <= 5) * 100 / n,
+            np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n))
+        print("\nRank of reviewer in submission's list:")
+        print("---------------------------------------")
+        print("Stat\t\told\tnew")
+        print("Avg\t\t%.2f\t%.2f" % (np.mean(old_rev_rank_in_sub),
+            np.mean(new_rev_rank_in_sub)))
+        print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub == 1) * 100 / n,
+            np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n))
+        print("Top 3\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub <= 3) * 100 / n,
+            np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n))
+
+        # Write results to a tsv file
+        with open(data_filename, 'a') as f:
+            f.write(f"%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (
+                n, new_size / n,
+                np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n,
+                np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n,
+                np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n,
+                np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n,
+                ))
+
+def robust_experiment(cache_dir, prefix, use_original_words=True):
+    # Load submissions
+    submissions = list(bid.load_submissions(cache_dir).values())
+
+    # Load new reviewers
+    pc = common.PC()
+    pc.load("%s/%s_pc.dat" % (cache_dir, prefix))
+    reviewers = list(pc.reviewers())
+
+    # Load new model
+    m = bid.load_model(cache_dir, '%s_lda.model' % prefix)
+    # Prepare new adversarial probabilities
+    td = TopicData()
+    td.populate(m, reviewers, submissions)
+    save_adv_word_probs(reviewers, td, cache_dir, '%s_adv_words.dat' % prefix)
+    rev_word_prob = load_adv_word_probs(cache_dir, '%s_adv_words.dat' % prefix)
+
+    # Load old model
+    m = bid.load_model(cache_dir, 'lda.model')
+    pc = common.PC()
+    # Load old reviewers
+    pc.load("%s/pc.dat" % cache_dir)
+    reviewers = filter_reviewers(list(pc.reviewers()), 5)
+
+    td = TopicData.load(cache_dir)
+    bd = BidData.load(cache_dir)
+    filename = os.path.join(cache_dir, '%s_experiments.tsv' % prefix)
+    experiment0(reviewers, submissions, m, td, bd, rev_word_prob,
+            filename, 1000, use_original_words)
 
 def main():
     parser = argparse.ArgumentParser(description='Attack Autobid')
@@ -481,139 +644,12 @@ def main():
     pc = common.PC()
     pc.load("%s/pc.dat" % args.cache)
     reviewers = filter_reviewers(list(pc.reviewers()), 5)
-    submissions = filter_submissions(list(bid.load_submissions(args.cache).values()))
+    submissions = list(bid.load_submissions(args.cache).values())
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
-    # rev_word_prob = load_adv_word_probs(args.cache)
-    # experiment1(submissions, reviewers, m, bd, td, rev_word_prob)
-    # adversarialWords(reviewers[0], reviewers, td)
-    experiment5(submissions, reviewers, m, bd, td)
-    return 0
-
-    n = 1000
-
-    old_sub_rank_in_rev = np.zeros(n, dtype=int)
-    old_rev_rank_in_sub = np.zeros(n, dtype=int)
-
-    new_sub_rank_in_rev = np.zeros(n, dtype=int)
-    new_rev_rank_in_sub = np.zeros(n, dtype=int)
-
-    old_size = 0
-    new_size = 0
-
-    with open("%s/experiments_ava.tsv" % args.cache, 'a') as f:
-        # for i in trange(n, desc="Trials"):
-        for s_idx in trange(len(submissions), desc="Submissions"):
-            sub = submissions[s_idx]
-            for r_idx in trange(len(reviewers), desc="Reviewers"):
-            # r_idx = np.random.randint(0, len(reviewers))
-                rev = reviewers[r_idx]
-
-            # sub = None
-            # while (sub is None) or (sub.num_words == 0):
-            #     s_idx = np.random.randint(0, len(submissions))
-            #     sub = submissions[s_idx]
-
-            # Generate new doc based on adversarial word probs for the reviewer
-                new_doc = words_from_probs(rev_word_prob[rev.name()], sub)
-
-                # old_size += sub.num_words
-                # new_size += 1 + len(new_doc) / sub.num_words 
-
-            # # Generate new bids for this updated submission
-            # new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc + sub.words)],
-            #         td, reviewers)
-
-            # Generate new bids for this updated submission
-                new_bids = bids_for_doc(m[m.id2word.doc2bow(new_doc)],
-                        td, reviewers)
-
-
-                # Find old rank of sub in rev's list
-                osir = 1
-                for b in bd.normalized_bids[r_idx, :]:
-                    if b > bd.normalized_bids[r_idx, s_idx]:
-                        osir += 1
-                # old_sub_rank_in_rev[i] = rank
-
-                # Find old rank of rev in sub's list
-                oris = 1
-                for b in bd.normalized_bids[:, s_idx]:
-                    if b > bd.normalized_bids[r_idx, s_idx]:
-                        oris += 1
-                # old_rev_rank_in_sub[i] = rank
-
-                # Find new rank of sub in rev's list
-                sir = 1
-                # Normalize new bid using old min and max because we just need to
-                # compare with the old values of same reviewer
-                normalized_new_bid = bd.get_normalizer(
-                        bd.rev_min_raw[r_idx], bd.rev_max_raw[r_idx]
-                    )(new_bids[r_idx])
-                for si, b in enumerate(bd.normalized_bids[r_idx, :]):
-                    if si != s_idx and b > normalized_new_bid:
-                        sir += 1
-                # new_sub_rank_in_rev[i] = rank
-
-                # Find new rank of rev in sub's list
-                ris = 1
-                # Normalize new bid using new min and max because we need to
-                # compare across different reviewers
-                normalized_new_bid = bd.get_normalizer(
-                        min(bd.rev_min_raw[r_idx], new_bids[r_idx]),
-                        max(bd.rev_max_raw[r_idx], new_bids[r_idx])
-                    )(new_bids[r_idx])
-                for ri, b in enumerate(new_bids):
-                    # Normalize new bid using new min and max because we need to
-                    # compare across different reviewers
-                    b = bd.get_normalizer(
-                            min(bd.rev_min_raw[ri], b),
-                            max(bd.rev_max_raw[ri], b)
-                        )(b)
-                    if b > normalized_new_bid:
-                        ris += 1
-                # new_rev_rank_in_sub[i] = rank
-                f.write(f"%d\t%d\t%d\t%d\t%d\t%d\n" % (
-                    s_idx, r_idx,
-                    osir, sir,
-                    oris, ris
-                    ))
-
-    # print()
-    # print("# reviewers: %d, # submissions: %d" % (len(reviewers),
-    #     len(submissions)))
-    # print("# trials: %d" % n)
-    # print("Avg. old size (# words): %.2f" % (old_size / n,))
-    # print("Avg. new size: %.2fx" % (new_size / n,))
-    # print("\nRank of submission in reviewer's list:")
-    # print("---------------------------------------")
-    # print("Stat\t\told\tnew")
-    # print("Avg\t\t%.2f\t%.2f" % (np.mean(old_sub_rank_in_rev),
-    #     np.mean(new_sub_rank_in_rev)))
-    # print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev == 1) * 100 / n,
-    #     np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n))
-    # print("Top 5\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_sub_rank_in_rev <= 5) * 100 / n,
-    #     np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n))
-    # print("\nRank of reviewer in submission's list:")
-    # print("---------------------------------------")
-    # print("Stat\t\told\tnew")
-    # print("Avg\t\t%.2f\t%.2f" % (np.mean(old_rev_rank_in_sub),
-    #     np.mean(new_rev_rank_in_sub)))
-    # print("Top 1\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub == 1) * 100 / n,
-    #     np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n))
-    # print("Top 3\t\t%.2f%%\t%.2f%%" % (np.count_nonzero(old_rev_rank_in_sub <= 3) * 100 / n,
-    #     np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n))
-
-    # Write results to a tsv file
-    # with open("%s/experiments.tsv" % args.cache, 'a') as f:
-    #     f.write(f"%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (
-    #         n, new_size / n,
-    #         np.count_nonzero(new_sub_rank_in_rev == 1) * 100 / n,
-    #         np.count_nonzero(new_sub_rank_in_rev <= 5) * 100 / n,
-    #         np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n,
-    #         np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n,
-    #         ))
+    rev_word_prob = load_adv_word_probs(args.cache, 'adv_words.dat')
+    experiment0(reviewers, submissions, m, td, bd, rev_word_prob, 'experiments.tsv')
 
 if __name__ == "__main__":
     main()
