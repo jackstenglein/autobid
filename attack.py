@@ -46,7 +46,7 @@ class BidData:
 
 
     def populate(self, td, reviewers, submissions):
-        reviewers = filter_reviewers(list(pc.reviewers()), 5)
+        reviewers = filter_reviewers(list(reviewers), 5)
         self.normalized_bids = np.zeros((len(reviewers), len(submissions)), dtype=np.int)
         for r_idx in trange(len(reviewers)):
             rev = reviewers[r_idx]
@@ -603,6 +603,31 @@ def experiment0(reviewers, submissions, m, td, bd, rev_word_prob,
                 np.count_nonzero(new_rev_rank_in_sub == 1) * 100 / n,
                 np.count_nonzero(new_rev_rank_in_sub <= 3) * 100 / n,
                 ))
+            
+def robust_experiment_reverse(cache_dir, prefix, use_original_words=True):
+    # Load submissions
+    submissions = list(bid.load_submissions(cache_dir).values())
+
+    # Load new reviewers
+    pc = common.PC()
+    pc.load("%s/%s_pc.dat" % (cache_dir, prefix))
+    reviewers = filter_reviewers(list(pc.reviewers()), 5)
+
+    # Load new model
+    m = bid.load_model(cache_dir, '%s_lda.model' % prefix)
+    # Prepare new topic data
+    td = TopicData()
+    td.populate(m, reviewers, submissions)
+    # Prepare new bid data
+    bd = BidData()
+    bd.populate(td, reviewers, submissions)
+
+    # Load old adversarial probs
+    rev_word_prob = load_adv_word_probs(cache_dir)
+
+    filename = os.path.join(cache_dir, '%s_experiments_robust_reverse.tsv' % prefix)
+    experiment0(reviewers, submissions, m, td, bd, rev_word_prob,
+            filename, 1000, use_original_words)
 
 def robust_experiment(cache_dir, prefix, use_original_words=True):
     # Load submissions
