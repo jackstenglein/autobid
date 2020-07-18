@@ -1,2 +1,3 @@
 paper-scraper-credentials.csv
 __pycache__/
+*.dat

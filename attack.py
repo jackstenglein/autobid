@@ -154,9 +154,9 @@ def save_adv_word_probs(reviewers, td, cache_dir, filename=""):
     rev_word_prob = {}
     pool = multiprocessing.Pool()
 
-    inputs = [(rev, td) for rev in reviewers]
+    inputs = [(rev, reviewers, td) for rev in reviewers]
     print("Starting parallel work")
-    outputs = pool.starmap(adv_word_probs_for_rev, inputs)
+    outputs = pool.starmap(adversarialWords, inputs)
     print("Done")
     for i, rev in enumerate(reviewers):
         rev_word_prob[rev.name()] = outputs[i]
@@ -421,7 +421,7 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
             newDoc = words_from_probs(wordProbabilities, submission, size=i)
 
             # Get the new document size
-            newSize += 1 + len(newDoc) / submission.num_words
+            newSize += len(newDoc) / submission.num_words
 
             # Generate the new bids
             newBids = bids_for_doc(model[model.id2word.doc2bow(newDoc + submission.words)], topicData, allReviewers)
