@@ -380,6 +380,9 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
         assert b == len(allSubmissions)
 
         for subIndex, submission in tqdm(enumerate(allSubmissions), total=len(allSubmissions), desc="Submissions"):
+            if submission is None or submission.num_words == 0:
+                continue
+
             totalTrials += 1
             
             # Find the original top reviewer for the submission
