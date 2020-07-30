@@ -375,6 +375,10 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
         reviewerRankSum = 0     # The sum of the ranks of the reviewers in the new submissions' lists.
         newSize = 0             # The sum of the new submission sizes as a fraction of the old size
 
+        a, b = bidData.normalized_bids.shape
+        assert a == len(allReviewers)
+        assert b == len(allSubmissions)
+
         for subIndex, submission in tqdm(enumerate(allSubmissions), total=len(allSubmissions), desc="Submissions"):
             totalTrials += 1
             
