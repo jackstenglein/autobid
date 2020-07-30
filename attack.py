@@ -481,7 +481,7 @@ def main():
     pc = common.PC()
     pc.load("%s/pc.dat" % args.cache)
     reviewers = filter_reviewers(list(pc.reviewers()), 5)
-    submissions = filter_submissions(list(bid.load_submissions(args.cache).values()))
+    submissions = list(bid.load_submissions(args.cache).values())
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
