@@ -1,6 +1,7 @@
 from tqdm import tqdm
 from tqdm.auto import trange
 import numpy as np
+from numpy.linalg import norm
 import argparse
 import matplotlib.pyplot as plt
 import multiprocessing
@@ -470,8 +471,39 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
             ))
 
 
+def get_ranks_with_maximal_diff(rev1, rev2, numWordsInSubmission, model, bidData, topicData):
+    # Return (rank1, rank2) with maximal difference for (rev1, rev2) using an adversarial
+    # submission with `numWordsInSubmission` words.
+    pass
+
+
+def get_similarity(rev1, rev2, m):
+    v1 = np.array([ x[1] for x in m.get_document_topics(m.id2word.doc2bow(rev1.words), 0) ])
+    v2 = np.array([ x[1] for x in m.get_document_topics(m.id2word.doc2bow(rev2.words), 0) ])
+    return np.dot(v1, v2)/(norm(v1) * norm(v2))
+
+
+def experiment6(allReviewers, numWordsInSubmission, model, bidData, topicData):
+    reviewers = filter_reviewers(allReviewers, 5)
+    for rev1 in tqdm(reviewers):
+        for rev2 in tqdm(reviewers):
+            similartiy = get_similarity(rev1, rev2, model)
+            rev1rank, rev2rank = get_ranks_with_maximal_diff(rev1, rev2,
+                    numWordsInSubmission, model, bidData, topicData)
+            with open("data/experiment6.tsv", 'a') as f:
+                f.write(f"%d\t%s\t%s\t%f\t%d\t%d\n" % (
+                    numWordsInSubmission,
+                    rev1,
+                    rev2,
+                    similarity,
+                    rev1rank,
+                    rev2rank
+                ))
+
 
 def main():
+    # :(
+    return 0
     parser = argparse.ArgumentParser(description='Attack Autobid')
     parser.add_argument('-c', '--cache', help="Directory storing the pickled data about reviewers, submissions, and LDA model", required=True)
 
@@ -481,7 +513,7 @@ def main():
     pc = common.PC()
     pc.load("%s/pc.dat" % args.cache)
     reviewers = filter_reviewers(list(pc.reviewers()), 5)
-    submissions = filter_submissions(list(bid.load_submissions(args.cache).values()))
+    submissions = list(bid.load_submissions(args.cache).values())
     m = bid.load_model(args.cache)
     td = TopicData.load(args.cache)
     bd = BidData.load(args.cache)
