@@ -230,21 +230,27 @@ def adversarialWords(favoredReviewer, allReviewers, topicData, avoid=False):
     return wordProbabilities
     
 
+def numbered_words_from_probs(wds_prob, num_words):
+    """
+    Return list of adversarial words of size `num_words` as per their probability distribution.
+    """
+    wds = []
+    for w in wds_prob:
+        n = int(round(wds_prob[w] * num_words))
+        if n <= 0:
+            continue
+        for _ in range(n):
+            wds.append(w)
+    return wds
+
 
 def words_from_probs(wds_prob, sub, size=1):
     """
     Return list of adversarial words for `sub` as per their probability
     distribution
     """
-    wds = []
-    for w in wds_prob:
-        # n = int(round(wds_prob[w] * 1 * sub.num_words)) - sub.feature_vector[w]
-        n = int(round(wds_prob[w] * size * sub.num_words))# - sub.feature_vector[w]
-        if n <= 0:
-            continue
-        for _ in range(n):
-            wds.append(w)
-    return wds
+    return numbered_words_from_probs(wds_prob, size * sub.num_words)
+
 
 def experiment1(allSubmissions, allReviewers, model, bidData, topicData, reviewerWordProbability):
 
@@ -478,7 +484,35 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
 def get_ranks_with_maximal_diff(rev1, rev2, numWordsInSubmission, model, bidData, topicData):
     # Return (rank1, rank2) with maximal difference for (rev1, rev2) using an adversarial
     # submission with `numWordsInSubmission` words.
-    pass
+
+    # Sort the topics in order of the greatest probability difference
+    probabilityDifferences = []
+    topicList = topicData.rev_top[rev1.name()]
+    for topicId, topicProbability in topicList:
+        probabilityDifference = topicProbability - topicData.rev_top[rev2.name()].get(topicId, 0)
+        probabilityDifferences.append( (topicId, probabilityDifference) )
+    probabilityDifferences = sorted(probabilityDifferences, reverse=True, key=lambda topic: topic[1])
+
+    # Get the top words from all topics with positive probability difference. IE: favor rev1.
+    # Weight each word by its topic's probability difference
+    wordProbabilities = {}
+    for topicId, probabilityDifference in probabilityDifferences:
+        if probabilityDifference <= 0:
+            break
+        topicWord = topicData.top_wds[topicId][0]
+        wordProbabilities[topicWord] = max(wordProbabilities.get(topicWord, 0), probabilityDifference)
+
+    # Normalize the word probabilities
+    total = 0
+    for word in wordProbabilities:
+        total += wordProbabilities[word]
+    for word in wordProbabilities:
+        wordProbabilities[word] = wordProbabilities[word] / total
+
+    # Use the word probabilities to generate a fake submission
+    # Create bids for rev1 and rev2 on the fake submission
+    newDoc = numbered_words_from_probs(wordProbabilities, numWordsInSubmission)
+    return bids_for_doc(model[model.id2word.doc2bow(newDoc)], topicData, (rev1, rev2))
 
 
 def get_similarity(rev1, rev2, m):
