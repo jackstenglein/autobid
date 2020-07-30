@@ -405,13 +405,13 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
             
             # Get word probabilits to avoid the reviewer and generate the new doc
             wordProbabilities = adversarialWords(originalReviewer, allReviewers, topicData, avoid=True)
-            newDoc = words_from_probs(wordProbabilities, submission, size=i)
+            newDoc = words_from_probs(wordProbabilities, submission, size=i/10)
 
             # Get the new document size
-            newSize += 1 + len(newDoc) / submission.num_words 
+            newSize += len(newDoc) / submission.num_words 
 
             # Generate the new bids
-            newBids = bids_for_doc(model[model.id2word.doc2bow(newDoc + submission.words)], topicData, allReviewers)
+            newBids = bids_for_doc(model[model.id2word.doc2bow(newDoc)], topicData, allReviewers)
 
             # Find the new rank of the reviewer in the submission's list
             # Normalize new bid using new min and max because we need to
@@ -464,7 +464,7 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
         print()
 
         # Write results to a tsv file
-        with open("data/experiment5-originaltext.tsv", 'a') as f:
+        with open("data/experiment5-textextract.tsv", 'a') as f:
             f.write(f"%d\t%.2f\t%d\t%d\t%d\t%d\t%.2f\t%.2f\n" % (
                 totalTrials, 
                 newSize / totalTrials,
