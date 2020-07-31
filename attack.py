@@ -83,7 +83,7 @@ class TopicData:
         self.avg_top_probs = [0 for _ in range(m.num_topics)]
         num_revs = len(reviewers)
         for rev in tqdm(reviewers):
-            self.rev_top[rev.name()] = sorted(m[m.id2word.doc2bow(rev.words)],
+            self.rev_top[rev.name()] = sorted(m.get_document_topics(m.id2word.doc2bow(rev.words), 0),
                     key = lambda a: -1 * a[1])
             for t_id, t_prob in self.rev_top[rev.name()]:
                 self.avg_top_probs[t_id] += t_prob / num_revs
@@ -95,13 +95,13 @@ class TopicData:
     @classmethod
     def load(cls, cache_dir):
         print("Loading topic data...")
-        with open("%s/topic_data.dat" % cache_dir, "rb") as pickler:
+        with open("%s/topic_data_full.dat" % cache_dir, "rb") as pickler:
             res = pickle.load(pickler)
         print("Loading topic data complete!")
         return res
 
     def save(self, cache_dir):
-        with open("%s/topic_data.dat" % cache_dir, "wb") as pickler:
+        with open("%s/topic_data_full.dat" % cache_dir, "wb") as pickler:
             pickle.dump(self, pickler)
 
 def bids_for_rev(rev, td, submissions):
@@ -481,15 +481,37 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
             ))
 
 
-def get_ranks_with_maximal_diff(rev1, rev2, numWordsInSubmission, model, bidData, topicData):
+def get_new_rank(r_idx, new_bids, bd):
+    # Find the new rank of the reviewer in the submission's list
+    # Normalize new bid using new min and max because we need to
+    # compare across different reviewers
+    ris = 1
+    normalized_new_bid = bd.get_normalizer(
+            min(bd.rev_min_raw[r_idx], new_bids[r_idx]),
+            max(bd.rev_max_raw[r_idx], new_bids[r_idx])
+        )(new_bids[r_idx])
+    for ri, b in enumerate(new_bids):
+        # Normalize new bid using new min and max because we need to
+        # compare across different reviewers
+        b = bd.get_normalizer(
+                min(bd.rev_min_raw[ri], b),
+                max(bd.rev_max_raw[ri], b)
+            )(b)
+        if b > normalized_new_bid:
+            ris += 1
+    return ris
+
+
+def get_ranks_with_maximal_diff(r1_idx, rev1, r2_idx, rev2, reviewers, numWordsInSubmission, model, bidData, topicData):
     # Return (rank1, rank2) with maximal difference for (rev1, rev2) using an adversarial
     # submission with `numWordsInSubmission` words.
 
     # Sort the topics in order of the greatest probability difference
     probabilityDifferences = []
     topicList = topicData.rev_top[rev1.name()]
+    rev2_top = dict(topicData.rev_top[rev2.name()])
     for topicId, topicProbability in topicList:
-        probabilityDifference = topicProbability - topicData.rev_top[rev2.name()].get(topicId, 0)
+        probabilityDifference = topicProbability - rev2_top[topicId]
         probabilityDifferences.append( (topicId, probabilityDifference) )
     probabilityDifferences = sorted(probabilityDifferences, reverse=True, key=lambda topic: topic[1])
 
@@ -499,7 +521,7 @@ def get_ranks_with_maximal_diff(rev1, rev2, numWordsInSubmission, model, bidData
     for topicId, probabilityDifference in probabilityDifferences:
         if probabilityDifference <= 0:
             break
-        topicWord = topicData.top_wds[topicId][0]
+        topicWord = topicData.top_wds[topicId][0][0]
         wordProbabilities[topicWord] = max(wordProbabilities.get(topicWord, 0), probabilityDifference)
 
     # Normalize the word probabilities
@@ -510,23 +532,27 @@ def get_ranks_with_maximal_diff(rev1, rev2, numWordsInSubmission, model, bidData
         wordProbabilities[word] = wordProbabilities[word] / total
 
     # Use the word probabilities to generate a fake submission
-    # Create bids for rev1 and rev2 on the fake submission
     newDoc = numbered_words_from_probs(wordProbabilities, numWordsInSubmission)
-    return bids_for_doc(model[model.id2word.doc2bow(newDoc)], topicData, (rev1, rev2))
+    # Generate the new bids
+    newBids = bids_for_doc(model[model.id2word.doc2bow(newDoc)], topicData, reviewers)
+    return get_new_rank(r1_idx, newBids, bidData), get_new_rank(r2_idx, newBids, bidData)
 
 
-def get_similarity(rev1, rev2, m):
-    v1 = np.array([ x[1] for x in m.get_document_topics(m.id2word.doc2bow(rev1.words), 0) ])
-    v2 = np.array([ x[1] for x in m.get_document_topics(m.id2word.doc2bow(rev2.words), 0) ])
+def get_similarity(rev1, rev2, td, num_topics):
+    rev1_top = dict(td.rev_top[rev1.name()])
+    rev2_top = dict(td.rev_top[rev2.name()])
+    v1 = np.array([ rev1_top[t_id] for t_id in range(num_topics) ])
+    v2 = np.array([ rev2_top[t_id] for t_id in range(num_topics) ])
     return np.dot(v1, v2)/(norm(v1) * norm(v2))
 
 
 def experiment6(allReviewers, numWordsInSubmission, model, bidData, topicData):
     reviewers = filter_reviewers(allReviewers, 5)
-    for rev1 in tqdm(reviewers):
-        for rev2 in tqdm(reviewers):
-            similartiy = get_similarity(rev1, rev2, model)
-            rev1rank, rev2rank = get_ranks_with_maximal_diff(rev1, rev2,
+    num_topics = model.num_topics
+    for r1_idx, rev1 in tqdm(enumerate(reviewers)):
+        for r2_idx, rev2 in tqdm(enumerate(reviewers)):
+            similarity = get_similarity(rev1, rev2, topicData, num_topics)
+            rev1rank, rev2rank = get_ranks_with_maximal_diff(r1_idx, rev1, r2_idx, rev2, reviewers,
                     numWordsInSubmission, model, bidData, topicData)
             with open("data/experiment6.tsv", 'a') as f:
                 f.write(f"%d\t%s\t%s\t%f\t%d\t%d\n" % (
