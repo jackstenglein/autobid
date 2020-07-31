@@ -481,15 +481,20 @@ def experiment5(allSubmissions, allReviewers, model, bidData, topicData):
             ))
 
 
-def get_new_rank(r_idx, new_bids, bd):
-    # Find the new rank of the reviewer in the submission's list
+def get_new_ranks(r1_idx, r2_idx, new_bids, bd):
+    # Find the new ranks of the reviewers in the submission's list
     # Normalize new bid using new min and max because we need to
     # compare across different reviewers
-    ris = 1
-    normalized_new_bid = bd.get_normalizer(
-            min(bd.rev_min_raw[r_idx], new_bids[r_idx]),
-            max(bd.rev_max_raw[r_idx], new_bids[r_idx])
-        )(new_bids[r_idx])
+    ris1 = 1
+    ris2 = 1
+    normalized_new_bid1 = bd.get_normalizer(
+            min(bd.rev_min_raw[r1_idx], new_bids[r1_idx]),
+            max(bd.rev_max_raw[r1_idx], new_bids[r1_idx])
+        )(new_bids[r1_idx])
+    normalized_new_bid2 = bd.get_normalizer(
+            min(bd.rev_min_raw[r2_idx], new_bids[r2_idx]),
+            max(bd.rev_max_raw[r2_idx], new_bids[r2_idx])
+        )(new_bids[r2_idx])
     for ri, b in enumerate(new_bids):
         # Normalize new bid using new min and max because we need to
         # compare across different reviewers
@@ -497,9 +502,11 @@ def get_new_rank(r_idx, new_bids, bd):
                 min(bd.rev_min_raw[ri], b),
                 max(bd.rev_max_raw[ri], b)
             )(b)
-        if b > normalized_new_bid:
-            ris += 1
-    return ris
+        if b > normalized_new_bid1:
+            ris1 += 1
+        if b > normalized_new_bid2:
+            ris2 += 1
+    return ris1, ris2
 
 
 def get_ranks_with_maximal_diff(r1_idx, rev1, r2_idx, rev2, reviewers, numWordsInSubmission, model, bidData, topicData):
@@ -535,7 +542,7 @@ def get_ranks_with_maximal_diff(r1_idx, rev1, r2_idx, rev2, reviewers, numWordsI
     newDoc = numbered_words_from_probs(wordProbabilities, numWordsInSubmission)
     # Generate the new bids
     newBids = bids_for_doc(model[model.id2word.doc2bow(newDoc)], topicData, reviewers)
-    return get_new_rank(r1_idx, newBids, bidData), get_new_rank(r2_idx, newBids, bidData)
+    return get_new_ranks(r1_idx, r2_idx, newBids, bidData)
 
 
 def get_similarity(rev1, rev2, td, num_topics):
@@ -550,7 +557,7 @@ def experiment6(allReviewers, numWordsInSubmission, model, bidData, topicData):
     reviewers = filter_reviewers(allReviewers, 5)
     num_topics = model.num_topics
     for r1_idx, rev1 in tqdm(enumerate(reviewers)):
-        for r2_idx, rev2 in tqdm(enumerate(reviewers)):
+        for r2_idx, rev2 in tqdm(enumerate(reviewers[r1_idx+1:])):
             similarity = get_similarity(rev1, rev2, topicData, num_topics)
             rev1rank, rev2rank = get_ranks_with_maximal_diff(r1_idx, rev1, r2_idx, rev2, reviewers,
                     numWordsInSubmission, model, bidData, topicData)
